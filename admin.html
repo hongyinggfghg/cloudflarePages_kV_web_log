@@ -165,6 +165,22 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
 .editing-flag { color: var(--md-primary); font-style: normal; font-weight: 600; }
 .ci-actions { display: flex; gap: 2px; flex: none; }
 
+/* ---------------- 图床（R2） ---------------- */
+.drop-zone { margin-bottom: 14px; border: 1.5px dashed var(--md-outline-variant); border-radius: 16px; padding: 16px 12px; text-align: center; cursor: pointer; transition: border-color .2s, background .2s; }
+.drop-zone:hover, .drop-zone.over { border-color: var(--md-primary); background: var(--md-surface-container); }
+.drop-zone .msr { font-size: 30px; color: var(--md-primary); }
+.drop-zone p { font-size: .78rem; color: var(--md-on-surface-variant); margin-top: 6px; }
+.img-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; max-height: 340px; overflow-y: auto; }
+.img-cell { position: relative; border-radius: 14px; overflow: hidden; background: var(--md-surface-container); aspect-ratio: 4 / 3; }
+.img-cell img { width: 100%; height: 100%; object-fit: cover; }
+.img-cell .img-ops { position: absolute; inset: auto 0 0 0; display: flex; justify-content: center; gap: 2px; padding: 4px 0; background: linear-gradient(transparent, rgba(0,0,0,.55)); opacity: 0; transition: opacity .2s; }
+.img-cell:hover .img-ops { opacity: 1; }
+.img-cell .img-ops .icon-btn { color: #fff; width: 30px; height: 30px; }
+.img-cell .img-ops .icon-btn .msr { font-size: 17px; }
+.api-tip { margin-top: 14px; font-size: .74rem; color: var(--md-on-surface-variant); line-height: 1.8; }
+.api-tip code { font-family: var(--font-mono); font-size: .72rem; background: var(--md-surface-container-high); padding: 1px 6px; border-radius: 6px; word-break: break-all; }
+.api-tip summary { cursor: pointer; font-weight: 600; color: var(--md-primary); }
+.api-tip pre { background: var(--md-surface-container-high); border-radius: 10px; padding: 10px 12px; overflow-x: auto; font: .72rem/1.7 var(--font-mono); margin: 8px 0; white-space: pre; }
 
 .tl-form { display: flex; gap: 8px; margin-bottom: 14px; }
 .tl-form input { height: 40px; padding: 0 12px; border-radius: 12px; border: 1px solid var(--md-outline-variant); background: var(--md-surface-container-lowest); color: var(--md-on-surface); font: .8rem var(--font-sans); outline: none; }
@@ -340,6 +356,37 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
       </section>
 
       <section class="card">
+        <div class="side-head">
+          <h2 class="card-title"><span class="msr">image</span>图床（R2）</h2>
+          <button class="icon-btn sm" id="imgRefreshBtn" title="刷新图片列表"><span class="msr">refresh</span></button>
+        </div>
+        <div class="drop-zone" id="dropZone">
+          <span class="msr">cloud_upload</span>
+          <p>点击选择 / 拖入 / Ctrl+V 粘贴图片上传</p>
+        </div>
+        <input type="file" id="imgInput" accept="image/*" multiple hidden>
+        <div class="img-grid" id="imgGrid"><p class="placeholder">连接后显示已上传的图片</p></div>
+        <div class="api-tip">
+          <details>
+            <summary>PicGo / ShareX 对接</summary>
+            <p>接口：<code class="js-ep">/api/upload</code>（POST），图片用 multipart 字段 <code>file</code> 上传，鉴权头 <code>X-Admin-Token</code> = 发布密码，返回 JSON 里的 <code>url</code> 即外链。</p>
+            <pre>PicGo「自定义 Web 图床」：
+  API 地址   https://你的域名/api/upload
+  请求方式   POST
+  表单字段   file  （文件字段）
+  请求头     X-Admin-Token: 你的发布密码
+  URL 后缀   data.url
+
+ShareX「自定义上传器」：
+  Method     POST
+  URL        https://你的域名/api/upload
+  Headers    X-Admin-Token = 你的发布密码
+  Body       Form(Multipart)，文件字段名 file</pre>
+          </details>
+        </div>
+      </section>
+
+      <section class="card">
         <h2 class="card-title" style="margin-bottom:14px"><span class="msr">route</span>时间线</h2>
         <div class="tl-form">
           <input id="tDate" type="text" placeholder="2026-09-01" style="width:110px;flex:none">
@@ -364,6 +411,7 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
     <p>· 修改文章：在“云端文章”里点 <span class="msr" style="font-size:14px;vertical-align:-2px">edit</span> 载入 → 改完再点“发布文章”即可。</p>
     <p>· 时间线：每条后面点 <span class="msr" style="font-size:14px;vertical-align:-2px">edit</span> 载入修改（再点一次可取消），点 <span class="msr" style="font-size:14px;vertical-align:-2px">delete</span> 删除；编辑时“追加”按钮会变为“保存修改”。</p>
     <p>· 代码块：点“代码块”插入后，任何语言的代码直接粘贴进去即可，尖括号、引号等符号按纯文本原样显示，不需要手动转义。</p>
+    <p>· 图床：图片存 Cloudflare R2，经 <span class="msr" style="font-size:14px;vertical-align:-2px">content_copy</span> 复制外链后用“图片”标签插进正文；截图后直接 Ctrl+V 可自动上传并插入。PicGo / ShareX 见图床卡片里的对接说明（需在后端绑定 R2 桶 IMG_R2）。</p>
   </footer>
 </main>
 
@@ -450,6 +498,7 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
       posts = await fetchPosts();
       conn(`已连接 · 云端 ${posts.length} 篇文章`, 'cloud_done', 'ok');
       renderCloud();
+      loadImages();
       return true;
     } catch (e) {
       conn('连接失败', 'cloud_off', 'err');
@@ -740,6 +789,139 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
   }
   $('#tlAddBtn').addEventListener('click', addTimeline);
   $('#tText').addEventListener('keydown', e => { if (e.key === 'Enter') addTimeline(); });
+
+
+  // ============ 图床（R2） ============
+  const dropZone = $('#dropZone'), imgInput = $('#imgInput'), imgGrid = $('#imgGrid');
+  let images = [], imgBusy = false;
+
+  function updateEps() {
+    $$('.js-ep').forEach(el => { el.textContent = (base() || location.origin) + '/api/upload'; });
+  }
+  apiBaseEl.addEventListener('input', updateEps);
+  updateEps();
+
+  async function copyText(t) {
+    try { await navigator.clipboard.writeText(t); return true; }
+    catch (e) {
+      const ta = document.createElement('textarea');
+      ta.value = t; document.body.appendChild(ta); ta.select();
+      const ok = document.execCommand('copy'); ta.remove(); return ok;
+    }
+  }
+  async function copyAndMsg(t, okText) {
+    const ok = await copyText(t);
+    msg(ok ? 'ok' : 'err', ok ? okText : '复制失败', 'content_copy');
+  }
+
+  async function loadImages() {
+    if (!base() || !token()) return;
+    try {
+      const data = await fetchJSON(base() + '/api/images?t=' + Date.now(), { headers: { 'X-Admin-Token': token() } });
+      images = Array.isArray(data.images) ? data.images : [];
+      renderImages();
+    } catch (e) { /* 图床接口不存在（旧后端）时静默 */ }
+  }
+
+  function renderImages() {
+    if (!images.length) { imgGrid.innerHTML = '<p class="placeholder">还没有图片，上传第一张吧</p>'; return; }
+    imgGrid.innerHTML = images.map(im => `
+      <div class="img-cell" data-key="${esc(im.key)}" data-url="${esc(im.url)}">
+        <img src="${esc(im.url)}" alt="" loading="lazy">
+        <div class="img-ops">
+          <button class="icon-btn" data-act="copy" title="复制链接"><span class="msr">link</span></button>
+          <button class="icon-btn" data-act="md" title="复制 Markdown"><span class="msr">markdown</span></button>
+          <button class="icon-btn" data-act="insert" title="插入到正文"><span class="msr">edit_note</span></button>
+          <button class="icon-btn" data-act="del" title="删除"><span class="msr">delete</span></button>
+        </div>
+      </div>`).join('');
+  }
+
+  // 上传，返回成功的外链数组
+  async function uploadFiles(files) {
+    if (!base()) { msg('err', '请先填写 API 地址', 'cloud_off'); return []; }
+    if (!token()) { msg('err', '请先填写发布密码（ADMIN_TOKEN）', 'key'); return []; }
+    const list = Array.from(files).filter(f => f.type.startsWith('image/'));
+    if (!list.length) { msg('err', '只支持上传图片文件', 'error'); return []; }
+    if (imgBusy) { msg('info', '还有图片正在上传，稍等一下', 'hourglass_top'); return []; }
+    imgBusy = true;
+    const urls = [];
+    for (const f of list) {
+      const fd = new FormData();
+      fd.append('file', f, f.name);
+      try {
+        const data = await fetchJSON(base() + '/api/upload', {
+          method: 'POST', headers: { 'X-Admin-Token': token() }, body: fd
+        });
+        images.unshift({ key: data.key, url: data.url, size: data.size });
+        urls.push(data.url);
+        msg('ok', `上传成功（${list.length > 1 ? urls.length + '/' + list.length + ' ' : ''}${esc(f.name)}）`, 'check_circle');
+      } catch (e) {
+        msg('err', '上传失败：' + (e.status === 401 ? '密码不对' : e.status === 500 && /IMG_R2/.test(e.message) ? '后端未绑定 R2 桶（IMG_R2）' : esc(e.message)), 'error');
+      }
+    }
+    imgBusy = false;
+    renderImages();
+    return urls;
+  }
+
+  function insertToEditor(url, name) {
+    const snip = `<figure><img src="${url}" alt="${name || '图片'}" loading="lazy"><figcaption>图片说明</figcaption></figure>\n`;
+    const pos = contentEl.selectionStart ?? contentEl.value.length;
+    contentEl.setRangeText(snip, pos, pos, 'end');
+    contentEl.focus();
+    updateStats(); renderPreview();
+    msg('ok', '已插入到正文', 'check_circle');
+  }
+
+  async function delImage(key) {
+    if (!confirm('确定从图床删除这张图片？已发布文章里引用它的地方会失效。')) return;
+    try {
+      await fetchJSON(base() + '/api/upload?key=' + encodeURIComponent(key), {
+        method: 'DELETE', headers: { 'X-Admin-Token': token() }
+      });
+      images = images.filter(x => x.key !== key);
+      renderImages();
+      msg('ok', '已删除', 'delete');
+    } catch (e) {
+      msg('err', e.status === 401 ? '密码不对，无法删除' : '删除失败：' + esc(e.message), 'error');
+    }
+  }
+
+  dropZone.addEventListener('click', () => imgInput.click());
+  imgInput.addEventListener('change', () => { uploadFiles(imgInput.files); imgInput.value = ''; });
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('over'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('over'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault(); dropZone.classList.remove('over');
+    if (e.dataTransfer.files.length) uploadFiles(e.dataTransfer.files);
+  });
+
+  // 任何位置 Ctrl+V 粘贴截图/图片：上传到图床；若焦点在正文框，再把外链插入正文
+  document.addEventListener('paste', async e => {
+    const files = Array.from((e.clipboardData && e.clipboardData.files) || []).filter(f => f.type.startsWith('image/'));
+    if (!files.length) return;
+    e.preventDefault();
+    const intoEditor = document.activeElement === contentEl;
+    const urls = await uploadFiles(files);
+    if (intoEditor) urls.forEach(u => insertToEditor(u, '粘贴图片'));
+  });
+
+  imgGrid.addEventListener('click', e => {
+    const cell = e.target.closest('.img-cell');
+    if (!cell) return;
+    const act = e.target.closest('[data-act]');
+    if (!act) return;
+    const { key, url } = cell.dataset;
+    if (act.dataset.act === 'copy') copyAndMsg(url, '外链已复制');
+    else if (act.dataset.act === 'md') copyAndMsg(`![${key.split('/').pop()}](${url})`, 'Markdown 已复制');
+    else if (act.dataset.act === 'insert') insertToEditor(url, key.split('/').pop());
+    else if (act.dataset.act === 'del') delImage(key);
+  });
+  $('#imgRefreshBtn').addEventListener('click', () => {
+    if (!base() || !token()) return msg('err', '请先填写 API 地址与发布密码', 'key');
+    loadImages();
+  });
 
   
   $('#backupBtn').addEventListener('click', async () => {

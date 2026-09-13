@@ -2,7 +2,7 @@
     'use strict';
 
     /* ============================================================
-     *               cloudflarePages_kV_web_log
+     * 红云的博客 · sunset_red的web_log!!!
      * ============================================================ */
     const API_BASE = '';
 
@@ -46,7 +46,7 @@
     const on = (sel, evt, fn) => {
         const el = document.querySelector(sel);
         if (el) el.addEventListener(evt, fn);
-        else console.warn(' 元素不存在，已跳过绑定：' + sel);
+        else console.warn('[红云的博客] 元素不存在，已跳过绑定：' + sel);
     };
     const safe = fn => { try { fn(); } catch (e) { console.error('渲染出错：', e); } };
 

@@ -1,4 +1,4 @@
-# cloudflarePages_kV_web_log
+# sunset_red 的 web log
 
 一个**纯静态、零构建、零框架、零成本**的无服务器博客：前端是普通 HTML/CSS/JS，后端是 Cloudflare Pages Functions，数据全部存在 Cloudflare Workers KV 里。文章通过自带的发布后台在线写作，不需要数据库、不需要本地环境。
 
@@ -24,15 +24,40 @@
 ```
 浏览器
  ├── 静态资源：index.html / style.css / script.js   ← Cloudflare Pages
- └── 数据请求：
-      GET    /api/posts            ┐
-      POST   /api/post             │
-      DELETE /api/post?id=xxx      ├─ Pages Functions  ──►  Workers KV (BLOG_KV)
-      GET    /api/timeline         │   (functions/api)      ├─ 键 posts    ：文章数组
-      POST   /api/timeline         │                        └─ 键 timeline ：时间线数组
-      PUT    /api/timeline         │
-      DELETE /api/timeline?i=xxx   ┘
+ ├── 数据请求：
+ │    GET    /api/posts            ┐
+ │    POST   /api/post             │
+ │    DELETE /api/post?id=xxx      ├─ Pages Functions  ──►  Workers KV (BLOG_KV)
+ │    GET    /api/timeline         │   (functions/api)      ├─ 键 posts    ：文章数组
+ │    POST   /api/timeline         │                        └─ 键 timeline ：时间线数组
+ │    PUT    /api/timeline         │
+ │    DELETE /api/timeline?i=xxx   ┘
+ └── 图床：
+      POST   /api/upload           ┐  上传（multipart 字段 file，或图片二进制，兼容 PicGo / ShareX）
+      DELETE /api/upload?key=xxx   ├─ Pages Functions  ──►  R2 存储桶 (IMG_R2)
+      GET    /api/images           │   (functions/api)      └─ 键 img/年/月/时间戳-随机串.ext
+      GET    /images/*             ┘   (functions/images)     从 R2 读图返回（隐藏 R2 原始域名，强缓存）
 ```
+
+## 🖼️ 图床（R2）
+
+- **存储**：图片存 R2 桶（绑定变量名 `IMG_R2`），键形如 `img/2026/09/xxxx.jpg`（按月归档，不含原始文件名）。
+- **上传**：admin.html 图床卡片支持点击选择 / 拖拽 / Ctrl+V 粘贴（截图直接粘贴即可自动上传并插入正文）；第三方工具走 `/api/upload`，支持 multipart（字段 `file`）和原始二进制两种请求体，鉴权可用 `X-Admin-Token` / `Authorization: Bearer` / `?token=`。
+- **访问**：默认经 `/images/<key>` 从 R2 读取（永久强缓存 + CSP 沙箱防 SVG 夹带脚本），自动隐藏 R2 原始域名；若想用自定义 CDN 域名，把环境变量 `IMG_CDN_URL` 设为 `https://img.你的域名`，上传返回的外链会直接指向它。
+- **单张上限 20MB**，支持 jpg / png / gif / webp / avif / bmp / ico。 (R2 使用需要银行卡可选择不使用R2)
+
+
+PicGo（自定义 Web 图床）：
+
+```
+API 地址   https://你的域名/api/upload
+请求方式   POST
+表单字段   file（文件字段）
+请求头     X-Admin-Token: 你的发布密码
+URL 后缀   data.url
+```
+
+ShareX（自定义上传器）：Method `POST`，URL `https://你的域名/api/upload`，Header `X-Admin-Token=密码`，Body 选 Form (Multipart)，文件字段名 `file`。
 
 ## 📁 目录结构
 
@@ -41,22 +66,30 @@
 ├── index.html          # 博客前端（单页应用）
 ├── script.js           # 前端逻辑：路由、渲染、搜索、主题等（顶部含内置演示文章）
 ├── style.css           # Material Design 3 风格样式
-├── admin.html          # 发布后台：写文章 / 管理时间线 / 一键备份
+├── admin.html          # 发布后台：写文章 / 图床管理 / 管理时间线 / 一键备份
 ├── functions/
-│   └── api/
-│       ├── posts.js    # GET    /api/posts     读取全部文章
-│       ├── post.js     # POST   /api/post      新建 / 覆盖更新（同 id）
-│       │               # DELETE /api/post?id=  删除文章
-│       └── timeline.js # /api/timeline 的 GET / POST / PUT / DELETE
+│   ├── api/
+│   │   ├── posts.js    # GET    /api/posts     读取全部文章
+│   │   ├── post.js     # POST   /api/post      新建 / 覆盖更新（同 id）
+│   │   │               # DELETE /api/post?id=  删除文章
+│   │   ├── timeline.js # /api/timeline 的 GET / POST / PUT / DELETE
+│   │   ├── upload.js   # POST   /api/upload    上传图片到 R2
+│   │   │               # DELETE /api/upload?key= 删除图片
+│   │   └── images.js   # GET    /api/images    列出图床图片
+│   └── images/
+│       └── [[path]].js # GET    /images/*      从 R2 读图返回（访问层）
 └── 1788…a2.jpg         # 头像 / favicon（根目录引用）
 ```
 
 ## 🚀 部署到 Cloudflare Pages
 
-### 1. 创建 KV 命名空间
+### 1. 创建 KV 命名空间与 R2 图床桶
 
 Dashboard → Workers & Pages → KV → Create namespace，命名如 `BLOG_KV`。
 （命令行方式：`npx wrangler kv namespace create BLOG_KV`）
+
+图床再建一个 R2 桶：Dashboard → R2 → Create bucket，命名如 `blog-img`（首次需开通 R2，免费额度 10GB 存储，足够图床用）。
+（命令行方式：`npx wrangler r2 bucket create blog-img`）
 
 ### 2. 创建 Pages 项目
 
@@ -65,23 +98,25 @@ Dashboard → Workers & Pages → KV → Create namespace，命名如 `BLOG_KV`�
 - **连接 Git 仓库**：Build command 留空，构建输出目录填 `/`（根目录就是全部静态资源）；
 - **命令行直传**：`npx wrangler pages deploy .`
 
-### 3. 绑定 KV 与设置密码（两处都要）
+### 3. 绑定 KV、R2 与设置密码
 
 | 设置项 | 位置 | 值 |
 |---|---|---|
 | KV namespace binding | 项目 Settings → Bindings / Functions | 变量名 `BLOG_KV` → 选择第 1 步的命名空间 |
+| R2 bucket binding | 项目 Settings → Bindings / Functions | 变量名 `IMG_R2` → 选择第 1 步的 `blog-img` 桶 |
 | 环境变量 `ADMIN_TOKEN` | 项目 Settings → Environment variables | 你的发布密码（**生产与预览环境都设置**） |
+| 环境变量 `IMG_CDN_URL`（可选） | 项目 Settings → Environment variables | 绑定到 R2 桶的自定义域名，如 `https://img.你的域名`（不填则走本站 `/images/`） |
 
 Functions 目录会被 Pages 自动识别，无需任何构建配置。
 
 ### 4. 开始写作
 
-访问 `https://你的域名/admin.html`，填入发布密码即可发布文章。
+访问 `https://你的域名/admin.html`，填入发布密码即可发布文章；图床卡片可直接传图，PicGo / ShareX 对接见上文「图床（R2）」。
 
 ### 本地开发
 
 ```bash
-npx wrangler pages dev . --kv BLOG_KV --binding ADMIN_TOKEN=本地测试密码
+npx wrangler pages dev . --kv BLOG_KV --r2 IMG_R2 --binding ADMIN_TOKEN=本地测试密码
 ```
 
 会同时模拟 Functions 与本地 KV。直接双击 `index.html`（`file://` 协议）也可以看，此时自动使用内置演示文章。
@@ -239,6 +274,10 @@ console.log(ok);</code></pre>
 | POST | `/api/timeline` | ✅ | 追加一条，body：`{"date":"…","text":"…"}` |
 | PUT | `/api/timeline` | ✅ | 修改第 i 条，body：`{"i":0,"date":"…","text":"…"}` |
 | DELETE | `/api/timeline?i=2` | ✅ | 按索引删除一条 |
+| POST | `/api/upload` | ✅ | 上传图片到 R2：multipart 字段 `file`，或直接发图片二进制（ShareX）；返回 `{url, key, size}` |
+| DELETE | `/api/upload?key=img/…` | ✅ | 删除指定图片 |
+| GET | `/api/images` | ✅ | 列出图床全部图片（`{images:[{key,url,size,uploaded}]}`） |
+| GET | `/images/<key>` | 无 | 读取图片（访问层，强缓存；此路径公开，等于图片外链） |
 
 错误码：`401` 密码错误、`400` 缺字段或非法 JSON、`404` 文章/条目不存在。
 
