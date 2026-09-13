@@ -623,7 +623,7 @@ ShareX「自定义上传器」：
       featured: $('#featured').checked,
       seed: $('#pSeed').value.trim() || id
     };
-    // 自定义封面：填了才带 cover 字段（留空 = 发布后回落到 loremflickr 自动封面）
+    
     const cover = $('#pCover').value.trim();
     if (cover) post.cover = cover;
     return post;
@@ -751,7 +751,7 @@ ShareX「自定义上传器」：
     else delTimeline(i);
   });
   function startTlEdit(i) {
-    if (i === tlEditing) { resetTlForm(); renderTimeline(tlCache); return; } // 再点一次同一行的“编辑”= 取消编辑
+    if (i === tlEditing) { resetTlForm(); renderTimeline(tlCache); return; } 
     const item = tlCache[i];
     if (!item) return;
     tlEditing = i;
@@ -802,7 +802,7 @@ ShareX「自定义上传器」：
         headers: { 'X-Admin-Token': token() }
       });
       if (tlEditing === i) resetTlForm();
-      else if (tlEditing > i) tlEditing--; // 被删条目排在编辑条目之前，索引随之后移
+      else if (tlEditing > i) tlEditing--; 
       msg('ok', '已删除这条时间线', 'delete');
       loadTimeline();
     } catch (e) {
@@ -861,7 +861,7 @@ ShareX「自定义上传器」：
       </div>`).join('');
   }
 
-  // 上传，返回成功的外链数组
+  
   async function uploadFiles(files) {
     if (!base()) { msg('err', '请先填写 API 地址', 'cloud_off'); return []; }
     if (!token()) { msg('err', '请先填写发布密码（ADMIN_TOKEN）', 'key'); return []; }
@@ -921,7 +921,7 @@ ShareX「自定义上传器」：
     if (e.dataTransfer.files.length) uploadFiles(e.dataTransfer.files);
   });
 
-  // 任何位置 Ctrl+V 粘贴截图/图片：上传到图床；若焦点在正文框，再把外链插入正文
+  
   document.addEventListener('paste', async e => {
     const files = Array.from((e.clipboardData && e.clipboardData.files) || []).filter(f => f.type.startsWith('image/'));
     if (!files.length) return;
@@ -936,7 +936,7 @@ ShareX「自定义上传器」：
     if (!cell) return;
     const act = e.target.closest('[data-act]');
     const { key, url } = cell.dataset;
-    // “图库选封面”模式：点图片本身即设为封面，不走下面的操作按钮
+    
     if (coverPicking) {
       if (!act) {
         coverEl.value = url;
@@ -969,13 +969,17 @@ ShareX「自定义上传器」：
   }
   function stopCoverPicking() { coverPicking = false; imgGrid.classList.remove('picking'); }
 
+  
+  coverEl.addEventListener('input', updateCoverPreview);
+  coverPreview.addEventListener('error', () => { coverPreview.hidden = true; }); // 链接无效时不显示裂图
+
   $('#coverClearBtn').addEventListener('click', () => {
     coverEl.value = '';
     updateCoverPreview();
     msg('info', '已清除自定义封面：发布后按分类用 loremflickr 自动生成', 'restart_alt');
   });
 
-  // 上传封面：走图床 /api/upload，成功后自动填入 URL
+
   const coverInput = document.createElement('input');
   coverInput.type = 'file'; coverInput.accept = 'image/*'; coverInput.hidden = true;
   document.body.appendChild(coverInput);
@@ -988,7 +992,7 @@ ShareX「自定义上传器」：
     if (urls[0]) { coverEl.value = urls[0]; updateCoverPreview(); }
   });
 
-  // 图库点选：进入选择模式后，点图床网格里的图片本体即设为封面
+  
   $('#coverPickBtn').addEventListener('click', () => {
     if (coverPicking) { stopCoverPicking(); msg('info', '已取消选择封面', 'cancel'); return; }
     if (!images.length) { msg('err', '图床还没有图片：先在“图床（R2）”卡片上传，或直接用“上传”按钮', 'image_not_supported'); return; }
