@@ -286,18 +286,6 @@
             <h1 class="post-title">${esc(p.title)}</h1>
             <p class="post-lead">${esc(p.excerpt)}</p>`;
 
-        // 封面图：有自定义 cover（如自建图床外链）才显示，否则保持原样不展示，列表卡片继续走 loremflickr
-        const coverEl = document.getElementById('postCover');
-        if (coverEl) {
-            if (p.cover) {
-                coverEl.hidden = false;
-                coverEl.innerHTML = `<img src="${esc(p.cover)}" alt="${esc(p.title)} 的封面" loading="lazy">`;
-            } else {
-                coverEl.hidden = true;
-                coverEl.innerHTML = '';
-            }
-        }
-
         
         const body = document.getElementById('postBody');
         if (body) {

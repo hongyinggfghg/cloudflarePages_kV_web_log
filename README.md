@@ -153,9 +153,9 @@ npx wrangler pages dev . --kv BLOG_KV --r2 IMG_R2 --binding ADMIN_TOKEN=本地�
 | `heat` | number |  | 热度，侧栏"热门文章"排序用，默认 20；喜欢数基数 = heat ÷ 5 |
 | `featured` | boolean |  | `true` 时置顶为首页大卡片 |
 | `seed` | string |  | 封面种子，同一 seed 生成的封面固定不变；留空用 `id` |
-| `cover` | string |  | 自定义封面图 URL（后台“封面图片”输入框设置：可上传到 R2 图床或填任意外链；留空按分类自动生成）。设置了 cover 时文章详情页顶部也会显示大图 |
+| `cover` | string |  | 自定义封面图 URL（后台“封面图片”输入框设置：可上传到 R2 图床或填任意外链；留空按分类自动生成），用于首页文章卡片与置顶大卡片 |
 
-**封面规则**：未指定 `cover` 时，按分类关键词自动取图（`前端`→computer,keyboard；`生活`→city,nature；`game`→game,military），来自 loremflickr.com，用 `seed` 保证同一篇文章每次封面相同；指定了 `cover`（如自建 R2 图床外链 `/images/img/…`）则直接使用它，首页卡片与文章页顶部都会显示。
+**封面规则**：未指定 `cover` 时，按分类关键词自动取图（`前端`→computer,keyboard；`生活`→city,nature；`game`→game,military），来自 loremflickr.com，用 `seed` 保证同一篇文章每次封面相同；指定了 `cover`（如自建 R2 图床外链 `/images/img/…`）则直接使用它。封面只出现在首页列表卡片与置顶大卡片上，文章详情页不显示封面。
 
 ## ✍️ 正文 HTML 表示方法（写作语法）
 
