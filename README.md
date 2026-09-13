@@ -153,9 +153,9 @@ npx wrangler pages dev . --kv BLOG_KV --r2 IMG_R2 --binding ADMIN_TOKEN=本地�
 | `heat` | number |  | 热度，侧栏"热门文章"排序用，默认 20；喜欢数基数 = heat ÷ 5 |
 | `featured` | boolean |  | `true` 时置顶为首页大卡片 |
 | `seed` | string |  | 封面种子，同一 seed 生成的封面固定不变；留空用 `id` |
-| `cover` | string |  | 自定义封面图 URL（后台未提供输入框，手动改 KV 时可用） |
+| `cover` | string |  | 自定义封面图 URL（后台“封面图片”输入框设置：可上传到 R2 图床或填任意外链；留空按分类自动生成）。设置了 cover 时文章详情页顶部也会显示大图 |
 
-**封面规则**：未指定 `cover` 时，按分类关键词自动取图（`前端`→computer,keyboard；`生活`→city,nature；`game`→game,military），来自 loremflickr.com，用 `seed` 保证同一篇文章每次封面相同。
+**封面规则**：未指定 `cover` 时，按分类关键词自动取图（`前端`→computer,keyboard；`生活`→city,nature；`game`→game,military），来自 loremflickr.com，用 `seed` 保证同一篇文章每次封面相同；指定了 `cover`（如自建 R2 图床外链 `/images/img/…`）则直接使用它，首页卡片与文章页顶部都会显示。
 
 ## ✍️ 正文 HTML 表示方法（写作语法）
 
@@ -285,6 +285,7 @@ console.log(ok);</code></pre>
 
 - **连接**：API 地址留空会自动填当前站点；填入 `ADMIN_TOKEN` 后点"测试连接"。可勾选"记住密码"（只存在本浏览器 localStorage，页面上不含任何密码，可放心公开部署）。
 - **发布**：文章 ID、标题、正文三项必填；同 ID 发布即覆盖更新；`Ctrl+Enter` 快速发布；支持实时预览与字数统计。
+- **封面**：表单“封面图片”处可填 URL、点“上传”传到图床自动填入、点“图库”从已上传图片点选；点“恢复默认”即删除自定义封面（回落 loremflickr 自动生成）。
 - **编辑**：右侧"云端文章"列表点 ✏️ 载入到表单 → 修改 → 再点"发布文章"。
 - **删除**：右侧列表点 🗑️，需确认。
 - **时间线**：右侧卡片内追加 / 编辑 / 删除，编辑时"追加"按钮会变成"保存修改"。

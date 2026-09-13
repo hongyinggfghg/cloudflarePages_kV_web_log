@@ -182,6 +182,12 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
 .api-tip summary { cursor: pointer; font-weight: 600; color: var(--md-primary); }
 .api-tip pre { background: var(--md-surface-container-high); border-radius: 10px; padding: 10px 12px; overflow-x: auto; font: .72rem/1.7 var(--font-mono); margin: 8px 0; white-space: pre; }
 
+/* ---------------- 封面图片 ---------------- */
+.cover-row { display: flex; align-items: center; gap: 8px; }
+.cover-row input { flex: 1; min-width: 0; width: auto; }
+.cover-preview { width: 72px; height: 54px; border-radius: 10px; object-fit: cover; border: 1px solid var(--md-outline-variant); background: var(--md-surface-container); flex: none; }
+.img-grid.picking { outline: 2px dashed var(--md-primary); outline-offset: 3px; border-radius: 14px; }
+
 .tl-form { display: flex; gap: 8px; margin-bottom: 14px; }
 .tl-form input { height: 40px; padding: 0 12px; border-radius: 12px; border: 1px solid var(--md-outline-variant); background: var(--md-surface-container-lowest); color: var(--md-on-surface); font: .8rem var(--font-sans); outline: none; }
 .tl-form input:focus { border-color: var(--md-primary); }
@@ -301,6 +307,16 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
           <label for="pSeed">封面种子（留空 = 用文章 ID）</label>
           <input id="pSeed" placeholder="任意字符串，同种子封面不变">
         </div>
+        <div class="field span-2">
+          <label for="pCover">封面图片（文章大图；留空 = 按分类自动用 loremflickr 生成）</label>
+          <div class="cover-row">
+            <img id="coverPreview" class="cover-preview" hidden alt="封面预览">
+            <input id="pCover" placeholder="图片外链 URL，或点“上传”传到图床后自动填入">
+            <button class="chip" type="button" id="coverUploadBtn" title="上传图片到图床并设为封面"><span class="msr">upload</span>上传</button>
+            <button class="chip" type="button" id="coverPickBtn" title="从图床已上传的图片里点选一张"><span class="msr">photo_library</span>图库</button>
+            <button class="chip" type="button" id="coverClearBtn" title="删除自定义封面，恢复 loremflickr 自动生成"><span class="msr">restart_alt</span>恢复默认</button>
+          </div>
+        </div>
         <div class="field">
           <label>置顶</label>
           <label class="switch" style="height:44px">
@@ -412,6 +428,7 @@ ShareX「自定义上传器」：
     <p>· 时间线：每条后面点 <span class="msr" style="font-size:14px;vertical-align:-2px">edit</span> 载入修改（再点一次可取消），点 <span class="msr" style="font-size:14px;vertical-align:-2px">delete</span> 删除；编辑时“追加”按钮会变为“保存修改”。</p>
     <p>· 代码块：点“代码块”插入后，任何语言的代码直接粘贴进去即可，尖括号、引号等符号按纯文本原样显示，不需要手动转义。</p>
     <p>· 图床：图片存 Cloudflare R2，经 <span class="msr" style="font-size:14px;vertical-align:-2px">content_copy</span> 复制外链后用“图片”标签插进正文；截图后直接 Ctrl+V 可自动上传并插入。PicGo / ShareX 见图床卡片里的对接说明（需在后端绑定 R2 桶 IMG_R2）。</p>
+    <p>· 封面：表单里可上传 / 图库点选 / 填 URL 设置封面大图；“恢复默认”即删除封面，按分类用 loremflickr 自动生成（留空时文章页不显示大图）。</p>
   </footer>
 </main>
 
@@ -552,6 +569,8 @@ ShareX「自定义上传器」：
     $('#pTags').value = (p.tags || []).join(', ');
     $('#pHeat').value = p.heat != null ? p.heat : 20;
     $('#pSeed').value = p.seed || '';
+    $('#pCover').value = p.cover || '';
+    updateCoverPreview();
     $('#featured').checked = !!p.featured;
     contentEl.value = p.content || '';
     badge(p.id);
@@ -560,7 +579,8 @@ ShareX「自定义上传器」：
     $('.editor-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
   function clearForm() {
-    ['pId', 'pTitle', 'pExcerpt', 'pTags', 'pSeed'].forEach(id => $('#' + id).value = '');
+    ['pId', 'pTitle', 'pExcerpt', 'pTags', 'pSeed', 'pCover'].forEach(id => $('#' + id).value = '');
+    updateCoverPreview();
     $('#pCat').value = '前端';
     $('#pDate').value = today();
     $('#pHeat').value = 20;
@@ -593,7 +613,7 @@ ShareX「自定义上传器」：
     }
     const tags = $('#pTags').value.split(/[,，]/).map(s => s.trim()).filter(Boolean);
     const autoExcerpt = content.replace(/<[^>]+>/g, '').replace(/\s/g, '').slice(0, 60);
-    return {
+    const post = {
       id, title, content,
       category: $('#pCat').value,
       date: $('#pDate').value || today(),
@@ -603,6 +623,10 @@ ShareX「自定义上传器」：
       featured: $('#featured').checked,
       seed: $('#pSeed').value.trim() || id
     };
+    // 自定义封面：填了才带 cover 字段（留空 = 发布后回落到 loremflickr 自动封面）
+    const cover = $('#pCover').value.trim();
+    if (cover) post.cover = cover;
+    return post;
   }
 
 
@@ -911,8 +935,19 @@ ShareX「自定义上传器」：
     const cell = e.target.closest('.img-cell');
     if (!cell) return;
     const act = e.target.closest('[data-act]');
-    if (!act) return;
     const { key, url } = cell.dataset;
+    // “图库选封面”模式：点图片本身即设为封面，不走下面的操作按钮
+    if (coverPicking) {
+      if (!act) {
+        coverEl.value = url;
+        updateCoverPreview();
+        stopCoverPicking();
+        msg('ok', '已设为封面，发布文章时生效', 'check_circle');
+        $('.editor-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+      return;
+    }
+    if (!act) return;
     if (act.dataset.act === 'copy') copyAndMsg(url, '外链已复制');
     else if (act.dataset.act === 'md') copyAndMsg(`![${key.split('/').pop()}](${url})`, 'Markdown 已复制');
     else if (act.dataset.act === 'insert') insertToEditor(url, key.split('/').pop());
@@ -921,6 +956,46 @@ ShareX「自定义上传器」：
   $('#imgRefreshBtn').addEventListener('click', () => {
     if (!base() || !token()) return msg('err', '请先填写 API 地址与发布密码', 'key');
     loadImages();
+  });
+
+  // ============ 封面图片（自建图床 / 外链，留空回落 loremflickr） ============
+  const coverEl = $('#pCover'), coverPreview = $('#coverPreview');
+  let coverPicking = false;
+
+  function updateCoverPreview() {
+    const v = coverEl.value.trim();
+    if (v) { coverPreview.src = v; coverPreview.hidden = false; }
+    else { coverPreview.hidden = true; coverPreview.removeAttribute('src'); }
+  }
+  function stopCoverPicking() { coverPicking = false; imgGrid.classList.remove('picking'); }
+
+  $('#coverClearBtn').addEventListener('click', () => {
+    coverEl.value = '';
+    updateCoverPreview();
+    msg('info', '已清除自定义封面：发布后按分类用 loremflickr 自动生成', 'restart_alt');
+  });
+
+  // 上传封面：走图床 /api/upload，成功后自动填入 URL
+  const coverInput = document.createElement('input');
+  coverInput.type = 'file'; coverInput.accept = 'image/*'; coverInput.hidden = true;
+  document.body.appendChild(coverInput);
+  $('#coverUploadBtn').addEventListener('click', () => coverInput.click());
+  coverInput.addEventListener('change', async () => {
+    const f = coverInput.files && coverInput.files[0];
+    coverInput.value = '';
+    if (!f) return;
+    const urls = await uploadFiles([f]);
+    if (urls[0]) { coverEl.value = urls[0]; updateCoverPreview(); }
+  });
+
+  // 图库点选：进入选择模式后，点图床网格里的图片本体即设为封面
+  $('#coverPickBtn').addEventListener('click', () => {
+    if (coverPicking) { stopCoverPicking(); msg('info', '已取消选择封面', 'cancel'); return; }
+    if (!images.length) { msg('err', '图床还没有图片：先在“图床（R2）”卡片上传，或直接用“上传”按钮', 'image_not_supported'); return; }
+    coverPicking = true;
+    imgGrid.classList.add('picking');
+    msg('info', '请在图床网格里点选一张作为封面（再点“图库”可取消）', 'touch_app');
+    imgGrid.scrollIntoView({ behavior: 'smooth', block: 'center' });
   });
 
   
