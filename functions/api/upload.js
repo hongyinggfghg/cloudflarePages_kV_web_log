@@ -46,7 +46,13 @@ const isFile = v => v && typeof v === 'object' && typeof v.arrayBuffer === 'func
 
 async function save(request, env, buf, type, name) {
   const key = randKey(pickExt(name, type));
-  await env.IMG_R2.put(key, buf, { httpMetadata: { contentType: type || 'application/octet-stream' } });
+  // cacheControl 写进对象元数据：走 R2 自定义域名时，CDN 与浏览器都会按它缓存一年（键唯一不可变，可放心）
+  await env.IMG_R2.put(key, buf, {
+    httpMetadata: {
+      contentType: type || 'application/octet-stream',
+      cacheControl: 'public, max-age=31536000, immutable',
+    }
+  });
   return RESP({ ok: true, url: publicUrl(request, env, key), key, size: buf.byteLength, contentType: type || null });
 }
 
