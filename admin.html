@@ -187,6 +187,10 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
 .cover-row input { flex: 1; min-width: 0; width: auto; }
 .cover-preview { width: 72px; height: 54px; border-radius: 10px; object-fit: cover; border: 1px solid var(--md-outline-variant); background: var(--md-surface-container); flex: none; }
 .img-grid.picking { outline: 2px dashed var(--md-primary); outline-offset: 3px; border-radius: 14px; }
+.img-more { grid-column: 1 / -1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 38px; border-radius: 12px; border: 1px dashed var(--md-outline-variant); color: var(--md-primary); font-size: .78rem; font-weight: 500; }
+.img-more:hover { border-color: var(--md-primary); background: var(--md-surface-container); }
+.img-more:disabled { opacity: .55; cursor: default; }
+.img-more .msr { font-size: 18px; }
 
 .tl-form { display: flex; gap: 8px; margin-bottom: 14px; }
 .tl-form input { height: 40px; padding: 0 12px; border-radius: 12px; border: 1px solid var(--md-outline-variant); background: var(--md-surface-container-lowest); color: var(--md-on-surface); font: .8rem var(--font-sans); outline: none; }
@@ -817,7 +821,7 @@ ShareX「自定义上传器」：
 
   // ============ 图床（R2） ============
   const dropZone = $('#dropZone'), imgInput = $('#imgInput'), imgGrid = $('#imgGrid');
-  let images = [], imgBusy = false;
+  let images = [], imgBusy = false, imgCursor = null; // imgCursor：下一页游标，null = 已全部加载
 
   function updateEps() {
     $$('.js-ep').forEach(el => { el.textContent = (base() || location.origin) + '/api/upload'; });
@@ -843,8 +847,29 @@ ShareX「自定义上传器」：
     try {
       const data = await fetchJSON(base() + '/api/images?t=' + Date.now(), { headers: { 'X-Admin-Token': token() } });
       images = Array.isArray(data.images) ? data.images : [];
+      imgCursor = data.cursor || null; 
       renderImages();
     } catch (e) { /* 图床接口不存在（旧后端）时静默 */ }
+  }
+
+  // 带游标取下一页（R2 单次 list 上限 1000，分页直至枚举完）
+  async function loadMoreImages() {
+    if (!imgCursor || imgBusy) return;
+    imgBusy = true;
+    const btn = imgGrid.querySelector('[data-more]');
+    if (btn) btn.disabled = true;
+    try {
+      const data = await fetchJSON(base() + '/api/images?cursor=' + encodeURIComponent(imgCursor), { headers: { 'X-Admin-Token': token() } });
+      images = images.concat(Array.isArray(data.images) ? data.images : []);
+      imgCursor = data.cursor || null;
+      renderImages();
+    } catch (e) {
+      msg('err', '加载更多失败：' + esc(e.message), 'error');
+      if (btn) btn.disabled = false;
+      imgBusy = false;
+      return;
+    }
+    imgBusy = false;
   }
 
   function renderImages() {
@@ -858,7 +883,8 @@ ShareX「自定义上传器」：
           <button class="icon-btn" data-act="insert" title="插入到正文"><span class="msr">edit_note</span></button>
           <button class="icon-btn" data-act="del" title="删除"><span class="msr">delete</span></button>
         </div>
-      </div>`).join('');
+      </div>`).join('') + (imgCursor ? `
+      <button class="img-more" data-more="1" type="button"><span class="msr">expand_more</span>加载更多（已显示 ${images.length} 张）</button>` : '');
   }
 
   
@@ -932,6 +958,7 @@ ShareX「自定义上传器」：
   });
 
   imgGrid.addEventListener('click', e => {
+    if (e.target.closest('[data-more]')) { loadMoreImages(); return; }
     const cell = e.target.closest('.img-cell');
     if (!cell) return;
     const act = e.target.closest('[data-act]');

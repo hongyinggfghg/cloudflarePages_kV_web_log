@@ -276,7 +276,7 @@ console.log(ok);</code></pre>
 | DELETE | `/api/timeline?i=2` | ✅ | 按索引删除一条 |
 | POST | `/api/upload` | ✅ | 上传图片到 R2：multipart 字段 `file`，或直接发图片二进制（ShareX）；返回 `{url, key, size}` |
 | DELETE | `/api/upload?key=img/…` | ✅ | 删除指定图片 |
-| GET | `/api/images` | ✅ | 列出图床全部图片（`{images:[{key,url,size,uploaded}]}`） |
+| GET | `/api/images` | ✅ | 列出图床图片（游标分页：单页最多 1000 条，带 `?cursor=` 翻页，返回 `{images, truncated, cursor}`） |
 | GET | `/images/<key>` | 无 | 读取图片（访问层，强缓存；此路径公开，等于图片外链） |
 
 错误码：`401` 密码错误、`400` 缺字段或非法 JSON、`404` 文章/条目不存在。
