@@ -1,9 +1,6 @@
 # cloudflarePages_kV_web_log
 
-一个**纯静态、零构建、零框架、零成本**的无服务器博客：前端是普通 HTML/CSS/JS，后端是 Cloudflare Pages Functions，数据全部存在 Cloudflare Workers KV 里。文章通过自带的发布后台在线写作，不需要数据库、不需要本地环境。
-
-> 作者：红云（sunset_red） Powered by Cloudflare Pages + Workers KV· + z.ai GLM-5.3
-
+一个**纯静态、零构建、零框架、零成本**的无服务器博客
 
 
 
@@ -113,13 +110,7 @@ Functions 目录会被 Pages 自动识别，无需任何构建配置。
 
 访问 `https://你的域名/admin.html`，填入发布密码即可发布文章；图床卡片可直接传图，PicGo / ShareX 对接见上文「图床（R2）」。
 
-### 本地开发
 
-```bash
-npx wrangler pages dev . --kv BLOG_KV --r2 IMG_R2 --binding ADMIN_TOKEN=本地测试密码
-```
-
-会同时模拟 Functions 与本地 KV。直接双击 `index.html`（`file://` 协议）也可以看，此时自动使用内置演示文章。
 
 ## 📝 文章数据结构（表示方法之一）
 
