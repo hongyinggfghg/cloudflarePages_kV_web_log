@@ -292,8 +292,13 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
           </select>
         </div>
         <div class="field">
-          <label for="pDate">日期</label>
+          <label for="pDate">文章日期</label>
           <input id="pDate" type="date">
+        </div>
+        <div class="field span-2">
+          <label for="pPublishAt">定时发布（留空则立即公开）</label>
+          <input id="pPublishAt" type="datetime-local">
+          <small class="side-desc">按本地时区选择发布时间；到时后博客 API 自动公开文章。</small>
         </div>
         <div class="field span-2">
           <label for="pExcerpt">摘要（列表卡片上的一句话，留空自动截取正文）</label>
@@ -359,6 +364,8 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
 
       <div class="editor-actions">
         <button class="btn btn-filled" id="publishBtn"><span class="msr">cloud_upload</span>发布文章</button>
+        <button class="btn btn-tonal" id="saveDraftBtn"><span class="msr">save</span>保存本地草稿</button>
+        <span class="side-desc" id="draftSaveStatus" aria-live="polite"></span>
         <button class="btn btn-text" id="previewBtn"><span class="msr">visibility</span>预览</button>
         <button class="btn btn-text" id="newBtn"><span class="msr">add</span>写新文章</button>
       </div>
@@ -373,6 +380,14 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
           <button class="icon-btn sm" id="refreshBtn" title="刷新列表"><span class="msr">refresh</span></button>
         </div>
         <div class="cloud-list" id="cloudList"><p class="placeholder">填写地址并“测试连接”后显示</p></div>
+      </section>
+
+      <section class="card">
+        <div class="side-head">
+          <h2 class="card-title"><span class="msr">draft</span>本地草稿</h2>
+          <span class="side-desc">仅保存在此浏览器</span>
+        </div>
+        <div class="cloud-list" id="localDraftList"></div>
       </section>
 
       <section class="card">
@@ -418,8 +433,13 @@ ShareX「自定义上传器」：
 
       <section class="card">
         <h2 class="card-title" style="margin-bottom:10px"><span class="msr">download</span>备份</h2>
-        <p class="side-desc">把云端全部文章与时间线导出为一个 JSON 文件，请妥善保存。</p>
-        <button class="btn btn-tonal" id="backupBtn"><span class="msr">download</span>导出备份</button>
+        <p class="side-desc">导出文章与时间线，或导入备份恢复。恢复会替换云端全部文章与时间线，请先保存当前备份。</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-tonal" id="backupBtn"><span class="msr">download</span>导出备份</button>
+          <button class="btn btn-tonal" id="restorePickBtn"><span class="msr">upload_file</span>选择备份恢复</button>
+        </div>
+        <input type="file" id="restoreInput" accept=".json,application/json" hidden>
+        <p class="side-desc" id="restoreStatus" aria-live="polite"></p>
       </section>
 
     </aside>
@@ -436,6 +456,7 @@ ShareX「自定义上传器」：
   </footer>
 </main>
 
+<script src="sanitize.js"></script>
 <script>
 (function () {
   'use strict';
@@ -509,12 +530,13 @@ ShareX「自定义上传器」：
     if (!r.ok) throw Object.assign(new Error(data.error || ('HTTP ' + r.status)), { status: r.status });
     return data;
   }
-  const fetchPosts = () => fetchJSON(base() + '/api/posts?t=' + Date.now());
+  const fetchPosts = () => fetchJSON(base() + '/api/admin/posts?t=' + Date.now(), { headers: { 'X-Admin-Token': token() } });
 
   
   let posts = [];
   async function testAndLoad(silent) {
     if (!base()) { conn('请填写 API 地址', 'cloud_off', 'err'); return false; }
+    if (!token()) { conn('请填写发布密码', 'key', 'err'); return false; }
     try {
       posts = await fetchPosts();
       conn(`已连接 · 云端 ${posts.length} 篇文章`, 'cloud_done', 'ok');
@@ -538,7 +560,7 @@ ShareX「自定义上传器」：
       <div class="cloud-item" data-id="${esc(p.id)}">
         <div class="ci-main">
           <b>${p.featured ? '<span class="msr star" title="置顶">star</span>' : ''}${esc(p.title)}</b>
-          <span>${esc(p.date)} · ${esc(p.category)}${p.id === editingId ? ' · <i class="editing-flag">编辑中</i>' : ''}</span>
+          <span>${esc(p.date)} · ${esc(p.category)}${p.publishAt && Date.parse(p.publishAt) > Date.now() ? ' · <i class="editing-flag">定时至 ' + esc(new Date(p.publishAt).toLocaleString()) + '</i>' : ''}${p.id === editingId ? ' · <i class="editing-flag">编辑中</i>' : ''}</span>
         </div>
         <div class="ci-actions">
           <button class="icon-btn sm" data-act="edit" title="载入编辑"><span class="msr">edit</span></button>
@@ -558,17 +580,128 @@ ShareX「自定义上传器」：
 
  
   const contentEl = $('#content');
+  const LOCAL_DRAFTS_KEY = 'hy-blog-local-drafts-v1';
+  let currentDraftId = null;
+  let draftSaveTimer = null;
+
+  function readLocalDrafts() {
+    try {
+      const data = JSON.parse(localStorage.getItem(LOCAL_DRAFTS_KEY) || '[]');
+      return Array.isArray(data) ? data.filter(d => d && typeof d.draftId === 'string' && d.post && typeof d.post === 'object') : [];
+    } catch (e) { return []; }
+  }
+  function renderLocalDrafts() {
+    const box = $('#localDraftList');
+    const drafts = readLocalDrafts();
+    if (!drafts.length) {
+      box.innerHTML = '<p class="placeholder">还没有本地草稿</p>';
+      return;
+    }
+    box.innerHTML = drafts.map(d => `
+      <div class="cloud-item" data-draft-id="${esc(d.draftId)}">
+        <div class="ci-main">
+          <b>${esc(d.post.title || d.post.id || '未命名草稿')}</b>
+          <span>保存于 ${esc(new Date(d.updatedAt || Date.now()).toLocaleString())}</span>
+        </div>
+        <div class="ci-actions">
+          <button class="icon-btn sm" data-draft-act="edit" title="载入草稿"><span class="msr">edit</span></button>
+          <button class="icon-btn sm" data-draft-act="delete" title="删除草稿"><span class="msr">delete</span></button>
+        </div>
+      </div>`).join('');
+  }
+  function draftSnapshot() {
+    const post = {
+      id: $('#pId').value.trim(),
+      title: $('#pTitle').value.trim(),
+      category: $('#pCat').value,
+      date: $('#pDate').value || today(),
+      excerpt: $('#pExcerpt').value.trim(),
+      tags: $('#pTags').value.split(/[,，]/).map(s => s.trim()).filter(Boolean),
+      heat: +$('#pHeat').value || 20,
+      featured: $('#featured').checked,
+      seed: $('#pSeed').value.trim(),
+      content: contentEl.value,
+      publishAtLocal: $('#pPublishAt').value,
+      cover: $('#pCover').value.trim()
+    };
+    return post;
+  }
+  function saveLocalDraft(silent) {
+    const post = draftSnapshot();
+    if (!post.id && !post.title && !post.content.trim()) {
+      if (!silent) msg('err', '先填写文章 ID、标题或正文，再保存草稿', 'edit');
+      return false;
+    }
+    const drafts = readLocalDrafts();
+    const draftId = currentDraftId || (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
+    const record = { draftId, updatedAt: new Date().toISOString(), post };
+    const index = drafts.findIndex(d => d.draftId === draftId);
+    if (index >= 0) drafts[index] = record; else drafts.unshift(record);
+    try {
+      localStorage.setItem(LOCAL_DRAFTS_KEY, JSON.stringify(drafts));
+      currentDraftId = draftId;
+      renderLocalDrafts();
+      $('#draftSaveStatus').textContent = '已保存到此浏览器 ' + new Date().toLocaleTimeString();
+      if (!silent) msg('ok', '草稿已保存到此浏览器', 'save');
+      return true;
+    } catch (e) {
+      $('#draftSaveStatus').textContent = '本地自动保存失败，请检查浏览器存储空间';
+      if (!silent) msg('err', '本地草稿保存失败：浏览器存储空间可能不足', 'error');
+      return false;
+    }
+  }
+  function removeCurrentDraft() {
+    if (!currentDraftId) return;
+    const drafts = readLocalDrafts().filter(d => d.draftId !== currentDraftId);
+    try { localStorage.setItem(LOCAL_DRAFTS_KEY, JSON.stringify(drafts)); } catch (e) {}
+    currentDraftId = null;
+    renderLocalDrafts();
+  }
+  function queueDraftSave() {
+    clearTimeout(draftSaveTimer);
+    draftSaveTimer = setTimeout(() => saveLocalDraft(true), 900);
+  }
+  $('#saveDraftBtn').addEventListener('click', () => saveLocalDraft(false));
+  $('#localDraftList').addEventListener('click', e => {
+    const row = e.target.closest('[data-draft-id]');
+    const action = e.target.closest('[data-draft-act]');
+    if (!row || !action) return;
+    const draft = readLocalDrafts().find(d => d.draftId === row.dataset.draftId);
+    if (!draft) return;
+    if (action.dataset.draftAct === 'edit') {
+      fillForm(draft.post, draft.draftId);
+      msg('info', '已载入本地草稿；编辑内容会继续保存在此浏览器', 'edit');
+    } else if (action.dataset.draftAct === 'delete') {
+      if (!confirm(`删除本地草稿《${draft.post.title || draft.post.id || '未命名草稿'}》？`)) return;
+      const remaining = readLocalDrafts().filter(d => d.draftId !== draft.draftId);
+      localStorage.setItem(LOCAL_DRAFTS_KEY, JSON.stringify(remaining));
+      if (currentDraftId === draft.draftId) { currentDraftId = null; clearForm(); }
+      renderLocalDrafts();
+      msg('ok', '本地草稿已删除', 'delete');
+    }
+  });
+  $('.editor-card').addEventListener('input', queueDraftSave);
+  $('.editor-card').addEventListener('change', queueDraftSave);
+
+  function toDatetimeLocal(iso) {
+    const date = new Date(iso);
+    return Number.isFinite(date.getTime())
+      ? new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+      : '';
+  }
 
   function badge(id) {
     const el = $('#editingBadge');
     if (id) { el.hidden = false; el.textContent = '正在编辑：' + id + '（发布将覆盖）'; }
     else el.hidden = true;
   }
-  function fillForm(p) {
+  function fillForm(p, localDraftId = null) {
+    if (draftSaveTimer) { clearTimeout(draftSaveTimer); saveLocalDraft(true); }
     $('#pId').value = p.id || '';
     $('#pTitle').value = p.title || '';
     $('#pCat').value = ['前端', '生活', 'game'].includes(p.category) ? p.category : '前端';
     $('#pDate').value = String(p.date || '').slice(0, 10) || today();
+    $('#pPublishAt').value = p.publishAtLocal || (Date.parse(p.publishAt) > Date.now() ? toDatetimeLocal(p.publishAt) : '');
     $('#pExcerpt').value = p.excerpt || '';
     $('#pTags').value = (p.tags || []).join(', ');
     $('#pHeat').value = p.heat != null ? p.heat : 20;
@@ -577,16 +710,22 @@ ShareX「自定义上传器」：
     updateCoverPreview();
     $('#featured').checked = !!p.featured;
     contentEl.value = p.content || '';
+    currentDraftId = localDraftId;
+    $('#draftSaveStatus').textContent = localDraftId ? '正在编辑本地草稿' : '';
     badge(p.id);
     updateStats(); renderPreview(); clearInvalid();
     msg('info', `已载入《${esc(p.title)}》，点“发布文章”即可覆盖更新`, 'edit');
     $('.editor-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
   function clearForm() {
+    clearTimeout(draftSaveTimer);
     ['pId', 'pTitle', 'pExcerpt', 'pTags', 'pSeed', 'pCover'].forEach(id => $('#' + id).value = '');
     updateCoverPreview();
     $('#pCat').value = '前端';
     $('#pDate').value = today();
+    $('#pPublishAt').value = '';
+    $('#draftSaveStatus').textContent = '';
+    currentDraftId = null;
     $('#pHeat').value = 20;
     $('#featured').checked = false;
     contentEl.value = '';
@@ -595,6 +734,7 @@ ShareX「自定义上传器」：
   function clearInvalid() { $$('.invalid').forEach(el => el.classList.remove('invalid')); }
 
   $('#newBtn').addEventListener('click', () => {
+    if (draftSaveTimer) { clearTimeout(draftSaveTimer); saveLocalDraft(true); }
     clearForm();
     msg('info', '已清空，开始写新文章吧', 'add');
     $('#pId').focus();
@@ -627,7 +767,16 @@ ShareX「自定义上传器」：
       featured: $('#featured').checked,
       seed: $('#pSeed').value.trim() || id
     };
-    
+    const publishAtValue = $('#pPublishAt').value;
+    if (publishAtValue) {
+      const publishAt = new Date(publishAtValue);
+      if (!Number.isFinite(publishAt.getTime()) || publishAt.getTime() <= Date.now()) {
+        $('#pPublishAt').classList.add('invalid');
+        msg('err', '发布时间必须晚于当前时间；留空即可立即发布', 'schedule');
+        return null;
+      }
+      post.publishAt = publishAt.toISOString();
+    }
     const cover = $('#pCover').value.trim();
     if (cover) post.cover = cover;
     return post;
@@ -635,8 +784,10 @@ ShareX「自定义上传器」：
 
 
   $('#publishBtn').addEventListener('click', async () => {
+    clearTimeout(draftSaveTimer);
     const post = collectPost();
-    if (!post) return;
+    if (!post) { saveLocalDraft(true); return; }
+    saveLocalDraft(true);
     if (!token()) return msg('err', '请先填写发布密码（ADMIN_TOKEN）', 'key');
     const btn = $('#publishBtn');
     btn.disabled = true;
@@ -646,7 +797,9 @@ ShareX「自定义上传器」：
         headers: { 'Content-Type': 'application/json', 'X-Admin-Token': token() },
         body: JSON.stringify(post)
       });
-      msg('ok', `发布成功：${data.action === 'updated' ? '已覆盖更新' : '新建'}《${esc(post.title)}》，云端共 ${data.total} 篇。刷新博客即可看到`, 'cloud_done');
+      removeCurrentDraft();
+      const scheduled = post.publishAt && Date.parse(post.publishAt) > Date.now();
+      msg('ok', scheduled ? `已保存定时文章《${esc(post.title)}》，将在 ${esc(new Date(post.publishAt).toLocaleString())} 公开` : `发布成功：${data.action === 'updated' ? '已覆盖更新' : '新建'}《${esc(post.title)}》，云端共 ${data.total} 篇。刷新博客即可看到`, scheduled ? 'schedule' : 'cloud_done');
       await testAndLoad(true);
     } catch (e) {
       msg('err', e.status === 401 ? '密码不对：请核对ADMIN_TOKEN' : '发布失败：' + esc(e.message), 'error');
@@ -692,6 +845,7 @@ ShareX「自定义上传器」：
       const sel = contentEl.value.slice(start, end);
       const out = (SNIPPETS[chip.dataset.ins] || (s => s))(sel);
       contentEl.setRangeText(out, start, end, 'end');
+      queueDraftSave();
       contentEl.focus();
       updateStats(); renderPreview();
     });
@@ -710,7 +864,7 @@ ShareX「自定义上传器」：
   let previewOn = false;
   function renderPreview() {
     if (!previewOn) return;
-    $('#preview').innerHTML = contentEl.value ? plainCodeBlocks(contentEl.value) : '<p class="placeholder">正文为空</p>';
+    $('#preview').innerHTML = contentEl.value ? window.sanitizePostHtml(plainCodeBlocks(contentEl.value)) : '<p class="placeholder">正文为空</p>';
   }
   $('#previewBtn').addEventListener('click', () => {
     previewOn = !previewOn;
@@ -919,6 +1073,7 @@ ShareX「自定义上传器」：
     const snip = `<figure><img src="${url}" alt="${name || '图片'}" loading="lazy"><figcaption>图片说明</figcaption></figure>\n`;
     const pos = contentEl.selectionStart ?? contentEl.value.length;
     contentEl.setRangeText(snip, pos, pos, 'end');
+    queueDraftSave();
     contentEl.focus();
     updateStats(); renderPreview();
     msg('ok', '已插入到正文', 'check_circle');
@@ -967,6 +1122,7 @@ ShareX「自定义上传器」：
     if (coverPicking) {
       if (!act) {
         coverEl.value = url;
+        queueDraftSave();
         updateCoverPreview();
         stopCoverPicking();
         msg('ok', '已设为封面，发布文章时生效', 'check_circle');
@@ -1002,6 +1158,7 @@ ShareX「自定义上传器」：
 
   $('#coverClearBtn').addEventListener('click', () => {
     coverEl.value = '';
+    queueDraftSave();
     updateCoverPreview();
     msg('info', '已清除自定义封面：发布后按分类用 loremflickr 自动生成', 'restart_alt');
   });
@@ -1016,7 +1173,7 @@ ShareX「自定义上传器」：
     coverInput.value = '';
     if (!f) return;
     const urls = await uploadFiles([f]);
-    if (urls[0]) { coverEl.value = urls[0]; updateCoverPreview(); }
+    if (urls[0]) { coverEl.value = urls[0]; queueDraftSave(); updateCoverPreview(); }
   });
 
   
@@ -1035,8 +1192,9 @@ ShareX「自定义上传器」：
       msg('info', '正在导出…', 'download');
       const [ps, tl] = await Promise.all([
         fetchPosts(),
-        fetchJSON(base() + '/api/timeline?t=' + Date.now()).catch(() => [])
+        fetchJSON(base() + '/api/timeline?t=' + Date.now())
       ]);
+      if (!Array.isArray(ps) || !Array.isArray(tl)) throw new Error('服务器返回的备份数据格式不正确');
       const data = { exportedAt: new Date().toISOString(), posts: ps, timeline: tl };
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
       const a = document.createElement('a');
@@ -1050,9 +1208,93 @@ ShareX「自定义上传器」：
     }
   });
 
-  
+
+  const restoreInput = $('#restoreInput');
+  const restoreStatus = $('#restoreStatus');
+  let restoreBackup = null;
+  $('#restorePickBtn').addEventListener('click', () => {
+    if (!base() || !token()) return msg('err', '请先填写 API 地址与发布密码', 'key');
+    restoreInput.click();
+  });
+  restoreInput.addEventListener('change', async () => {
+    const file = restoreInput.files && restoreInput.files[0];
+    restoreInput.value = '';
+    restoreBackup = null;
+    if (!file) return;
+    try {
+      const data = JSON.parse(await file.text());
+      if (!data || !Array.isArray(data.posts) || !Array.isArray(data.timeline)) {
+        throw new Error('备份必须包含 posts 和 timeline 数组');
+      }
+      const ids = new Set();
+      for (const post of data.posts) {
+        if (!post || typeof post.id !== 'string' || !post.id.trim() || typeof post.title !== 'string' ||
+            typeof post.date !== 'string' || typeof post.content !== 'string') {
+          throw new Error('文章条目缺少有效的 id、title、date 或 content');
+        }
+        if (post.publishAt != null && post.publishAt !== '' &&
+            (typeof post.publishAt !== 'string' || !Number.isFinite(Date.parse(post.publishAt)))) {
+          throw new Error('文章 publishAt 必须是有效的日期时间字符串');
+        }
+        if (ids.has(post.id)) throw new Error('备份中有重复的文章 ID：' + post.id);
+        ids.add(post.id);
+      }
+      for (const item of data.timeline) {
+        if (!item || typeof item.date !== 'string' || typeof item.text !== 'string') {
+          throw new Error('时间线条目缺少有效的 date 或 text');
+        }
+      }
+      restoreBackup = data;
+      restoreStatus.textContent = `已读取 ${file.name}：${data.posts.length} 篇文章、${data.timeline.length} 条时间线。请使用下方确认按钮执行替换。`;
+      let btn = $('#restoreApplyBtn');
+      if (!btn) {
+        btn = document.createElement('button');
+        btn.type = 'button';
+        btn.id = 'restoreApplyBtn';
+        btn.className = 'btn btn-filled';
+        btn.innerHTML = '<span class="msr">restore</span>确认替换云端数据';
+        restoreStatus.insertAdjacentElement('afterend', btn);
+        btn.addEventListener('click', applyRestore);
+      }
+      btn.hidden = false;
+      msg('info', '备份文件已校验；恢复会替换云端全部文章与时间线。', 'warning');
+    } catch (e) {
+      restoreBackup = null;
+      restoreStatus.textContent = '';
+      const btn = $('#restoreApplyBtn');
+      if (btn) btn.hidden = true;
+      msg('err', '无法读取备份：' + esc(e.message), 'error');
+    }
+  });
+
+  async function applyRestore() {
+    if (!restoreBackup) return msg('err', '请先选择有效的备份文件', 'error');
+    const count = restoreBackup.posts.length;
+    const timelineCount = restoreBackup.timeline.length;
+    if (!confirm(`确定用此备份替换云端全部数据吗？\n\n将写入 ${count} 篇文章和 ${timelineCount} 条时间线。\n云端不在备份中的文章和时间线将被删除，此操作不可撤销。`)) return;
+    const btn = $('#restoreApplyBtn');
+    btn.disabled = true;
+    try {
+      await fetchJSON(base() + '/api/backup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Admin-Token': token() },
+        body: JSON.stringify(restoreBackup)
+      });
+      restoreBackup = null;
+      restoreStatus.textContent = '恢复完成。';
+      btn.hidden = true;
+      await Promise.all([testAndLoad(true), loadTimeline()]);
+      msg('ok', `恢复完成：${count} 篇文章、${timelineCount} 条时间线`, 'check_circle');
+    } catch (e) {
+      msg('err', e.status === 401 ? '密码不对，无法恢复' : '恢复失败：' + esc(e.message), 'error');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
   $('#pDate').value = today();
   $('#tDate').value = today();
+  renderLocalDrafts();
   updateStats();
   if (base()) testAndLoad(true).then(ok => { if (ok) loadTimeline(); });
 })();

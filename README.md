@@ -23,6 +23,7 @@
  ├── 静态资源：index.html / style.css / script.js   ← Cloudflare Pages
  ├── 数据请求：
  │    GET    /api/posts            ┐
+ │    GET    /api/admin/posts     │   后台读取（需鉴权）
  │    POST   /api/post             │
  │    DELETE /api/post?id=xxx      ├─ Pages Functions  ──►  Workers KV (BLOG_KV)
  │    GET    /api/timeline         │   (functions/api)      ├─ 键 posts    ：文章数组
@@ -66,7 +67,9 @@ ShareX（自定义上传器）：Method `POST`，URL `https://你的域名/api/u
 ├── admin.html          # 发布后台：写文章 / 图床管理 / 管理时间线 / 一键备份
 ├── functions/
 │   ├── api/
-│   │   ├── posts.js    # GET    /api/posts     读取全部文章
+│   │   ├── posts.js    # GET    /api/posts     读取已公开文章
+│   │   ├── admin/
+│   │   │   └── posts.js # GET /api/admin/posts 后台读取全部文章（需鉴权）
 │   │   ├── post.js     # POST   /api/post      新建 / 覆盖更新（同 id）
 │   │   │               # DELETE /api/post?id=  删除文章
 │   │   ├── timeline.js # /api/timeline 的 GET / POST / PUT / DELETE
@@ -145,6 +148,7 @@ Functions 目录会被 Pages 自动识别，无需任何构建配置。
 | `featured` | boolean |  | `true` 时置顶为首页大卡片 |
 | `seed` | string |  | 封面种子，同一 seed 生成的封面固定不变；留空用 `id` |
 | `cover` | string |  | 自定义封面图 URL（后台“封面图片”输入框设置：可上传到 R2 图床或填任意外链；留空按分类自动生成），用于首页文章卡片与置顶大卡片 |
+| `publishAt` | string |  | 可选 ISO 日期时间；未来时间前对访客隐藏，到时自动公开 |
 
 **封面规则**：未指定 `cover` 时，按分类关键词自动取图（`前端`→computer,keyboard；`生活`→city,nature；`game`→game,military），来自 loremflickr.com，用 `seed` 保证同一篇文章每次封面相同；指定了 `cover`（如自建 R2 图床外链 `/images/img/…`）则直接使用它。封面只出现在首页列表卡片与置顶大卡片上，文章详情页不显示封面。
 
@@ -258,8 +262,10 @@ console.log(ok);</code></pre>
 
 | 方法 | 路径 | 鉴权 | 说明 |
 |---|---|:---:|---|
-| GET | `/api/posts` | 无 | 返回全部文章数组 |
+| GET | `/api/posts` | 无 | 返回已公开文章；未到发布时间的文章会隐藏 |
+| GET | `/api/admin/posts` | ✅ | 后台读取全部文章（包括定时发布文章） |
 | POST | `/api/post` | ✅ | 新建文章；body 中带已有 `id` 则覆盖更新 |
+| POST | `/api/backup` | ✅ | 校验备份后完整替换文章与时间线 |
 | DELETE | `/api/post?id=xxx` | ✅ | 删除指定文章 |
 | GET | `/api/timeline` | 无 | 返回时间线数组 |
 | POST | `/api/timeline` | ✅ | 追加一条，body：`{"date":"…","text":"…"}` |
@@ -276,11 +282,12 @@ console.log(ok);</code></pre>
 
 - **连接**：API 地址留空会自动填当前站点；填入 `ADMIN_TOKEN` 后点"测试连接"。可勾选"记住密码"（只存在本浏览器 localStorage，页面上不含任何密码，可放心公开部署）。
 - **发布**：文章 ID、标题、正文三项必填；同 ID 发布即覆盖更新；`Ctrl+Enter` 快速发布；支持实时预览与字数统计。
+- **草稿 / 定时发布**：草稿保存在当前浏览器，可自动保存、载入和删除；填写未来发布时间后发布会先保存到 KV，到点后访客接口自动公开文章，已打开的博客页也会在到点时刷新。后台文章列表需要 ADMIN_TOKEN 才能读取待发布内容。
 - **封面**：表单“封面图片”处可填 URL、点“上传”传到图床自动填入、点“图库”从已上传图片点选；点“恢复默认”即删除自定义封面（回落 loremflickr 自动生成）。
 - **编辑**：右侧"云端文章"列表点 ✏️ 载入到表单 → 修改 → 再点"发布文章"。
 - **删除**：右侧列表点 🗑️，需确认。
 - **时间线**：右侧卡片内追加 / 编辑 / 删除，编辑时"追加"按钮会变成"保存修改"。
-- **备份**：一键导出全部文章 + 时间线为 JSON 文件（`hongyun-blog-backup-日期.json`）。
+- **备份**：导出全部文章 + 时间线为 JSON；可导入备份并完整替换云端数据。恢复前会校验文件并要求确认，备份中缺少的云端条目会被删除。
 
 ## 🎨 自定义
 

@@ -289,7 +289,7 @@
         
         const body = document.getElementById('postBody');
         if (body) {
-            body.innerHTML = plainCodeBlocks(p.content || '');
+            body.innerHTML = window.sanitizePostHtml(plainCodeBlocks(p.content || ''));
 
             
             const hs = $$('h2, h3', body);
@@ -549,6 +549,19 @@
     }
 
     /* ==================== Workers KV 加载 ==================== */
+    let publishRefreshTimer = null;
+    function schedulePublishRefresh(iso) {
+        clearTimeout(publishRefreshTimer);
+        publishRefreshTimer = null;
+        const at = Date.parse(iso || '');
+        if (!Number.isFinite(at)) return;
+        const delay = Math.max(0, at - Date.now() + 1000);
+        publishRefreshTimer = setTimeout(() => {
+            if (Date.now() >= at) loadFromKV();
+            else schedulePublishRefresh(iso);
+        }, Math.min(delay, 2147483000));
+    }
+
     async function loadFromKV() {
         if (location.protocol === 'file:') return;
         const base = (API_BASE || '').trim().replace(/\/+$/, '');
@@ -557,6 +570,7 @@
         try {
             const r = await fetch(base + '/api/posts?t=' + Date.now(), { headers: { Accept: 'application/json' } });
             if (r.ok) {
+                schedulePublishRefresh(r.headers.get('X-Next-Publish-At'));
                 const posts = await r.json();
                 if (Array.isArray(posts) && posts.length) {
                     POSTS.length = 0;

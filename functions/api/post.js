@@ -1,6 +1,6 @@
 
 export async function onRequestPost({ request, env }) {
-  if (request.headers.get('X-Admin-Token') !== env.ADMIN_TOKEN) {
+  if (!env.ADMIN_TOKEN || request.headers.get('X-Admin-Token') !== env.ADMIN_TOKEN) {
     return RESP({ error: 'X-Admin-Token 校验失败' }, 401);
   }
   let post;
@@ -9,6 +9,10 @@ export async function onRequestPost({ request, env }) {
   }
   if (!post.id || !post.title || !post.date) {
     return RESP({ error: '文章缺少 id / title / date 字段' }, 400);
+  }
+  if (post.publishAt != null && post.publishAt !== '' &&
+      (typeof post.publishAt !== 'string' || !Number.isFinite(Date.parse(post.publishAt)))) {
+    return RESP({ error: 'publishAt 必须是有效的日期时间字符串' }, 400);
   }
   const raw = await env.BLOG_KV.get('posts');
   let posts = [];
@@ -21,7 +25,7 @@ export async function onRequestPost({ request, env }) {
 }
 
 export async function onRequestDelete({ request, env }) {
-  if (request.headers.get('X-Admin-Token') !== env.ADMIN_TOKEN) {
+  if (!env.ADMIN_TOKEN || request.headers.get('X-Admin-Token') !== env.ADMIN_TOKEN) {
     return RESP({ error: 'X-Admin-Token 校验失败' }, 401);
   }
   const id = new URL(request.url).searchParams.get('id');
