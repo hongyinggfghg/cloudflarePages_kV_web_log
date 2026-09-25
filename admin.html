@@ -156,8 +156,9 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
 
 /* ---------------- 云端文章列表 ---------------- */
 .cloud-list { display: flex; flex-direction: column; gap: 4px; max-height: 430px; overflow-y: auto; }
-.cloud-item { display: flex; align-items: center; gap: 10px; padding: 10px 8px; border-radius: 14px; transition: background .2s; }
+.cloud-item { display: flex; align-items: center; gap: 10px; padding: 10px 8px; border-radius: 14px; transition: background .2s; cursor: pointer; }
 .cloud-item:hover { background: var(--md-surface-container); }
+.cloud-item:focus-visible { outline: 2px solid var(--md-primary); outline-offset: 2px; }
 .ci-main { flex: 1; min-width: 0; }
 .ci-main b { display: flex; align-items: center; gap: 4px; font-size: .85rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ci-main .star { font-size: 15px; color: var(--md-tertiary); font-variation-settings: 'FILL' 1; flex: none; }
@@ -557,7 +558,7 @@ ShareX「自定义上传器」：
     if (!posts.length) { box.innerHTML = '<p class="placeholder">KV 里还没有文章，发布第一篇吧！</p>'; return; }
     const editingId = $('#pId').value.trim();
     box.innerHTML = posts.map(p => `
-      <div class="cloud-item" data-id="${esc(p.id)}">
+      <div class="cloud-item" data-id="${esc(p.id)}" tabindex="0" role="group" aria-label="文章：${esc(p.title)}">
         <div class="ci-main">
           <b>${p.featured ? '<span class="msr star" title="置顶">star</span>' : ''}${esc(p.title)}</b>
           <span>${esc(p.date)} · ${esc(p.category)}${p.publishAt && Date.parse(p.publishAt) > Date.now() ? ' · <i class="editing-flag">定时至 ' + esc(new Date(p.publishAt).toLocaleString()) + '</i>' : ''}${p.id === editingId ? ' · <i class="editing-flag">编辑中</i>' : ''}</span>
@@ -576,6 +577,12 @@ ShareX「自定义上传器」：
     const act = e.target.closest('[data-act]');
     if (!act || act.dataset.act === 'edit') fillForm(p);
     else if (act.dataset.act === 'del') delPost(p);
+  });
+  $('#cloudList').addEventListener('keydown', e => {
+    if ((e.key !== 'Enter' && e.key !== ' ') || e.target.closest('button')) return;
+    const item = e.target.closest('.cloud-item');
+    const p = item && posts.find(x => x.id === item.dataset.id);
+    if (p) { e.preventDefault(); fillForm(p); }
   });
 
  
@@ -598,13 +605,13 @@ ShareX「自定义上传器」：
       return;
     }
     box.innerHTML = drafts.map(d => `
-      <div class="cloud-item" data-draft-id="${esc(d.draftId)}">
+      <div class="cloud-item" data-draft-id="${esc(d.draftId)}" tabindex="0" role="group" aria-label="本地草稿：${esc(d.post.title || d.post.id || '未命名草稿')}">
         <div class="ci-main">
           <b>${esc(d.post.title || d.post.id || '未命名草稿')}</b>
-          <span>保存于 ${esc(new Date(d.updatedAt || Date.now()).toLocaleString())}</span>
+          <span>保存于 ${esc(new Date(d.updatedAt || Date.now()).toLocaleString())}${d.draftId === currentDraftId ? ' · <i class="editing-flag">编辑中</i>' : ''}</span>
         </div>
         <div class="ci-actions">
-          <button class="icon-btn sm" data-draft-act="edit" title="载入草稿"><span class="msr">edit</span></button>
+          <button class="icon-btn sm" data-draft-act="edit" title="载入编辑"><span class="msr">edit</span></button>
           <button class="icon-btn sm" data-draft-act="delete" title="删除草稿"><span class="msr">delete</span></button>
         </div>
       </div>`).join('');
@@ -665,10 +672,10 @@ ShareX「自定义上传器」：
   $('#localDraftList').addEventListener('click', e => {
     const row = e.target.closest('[data-draft-id]');
     const action = e.target.closest('[data-draft-act]');
-    if (!row || !action) return;
+    if (!row) return;
     const draft = readLocalDrafts().find(d => d.draftId === row.dataset.draftId);
     if (!draft) return;
-    if (action.dataset.draftAct === 'edit') {
+    if (!action || action.dataset.draftAct === 'edit') {
       fillForm(draft.post, draft.draftId);
       msg('info', '已载入本地草稿；编辑内容会继续保存在此浏览器', 'edit');
     } else if (action.dataset.draftAct === 'delete') {
@@ -678,6 +685,16 @@ ShareX「自定义上传器」：
       if (currentDraftId === draft.draftId) { currentDraftId = null; clearForm(); }
       renderLocalDrafts();
       msg('ok', '本地草稿已删除', 'delete');
+    }
+  });
+  $('#localDraftList').addEventListener('keydown', e => {
+    if ((e.key !== 'Enter' && e.key !== ' ') || e.target.closest('button')) return;
+    const row = e.target.closest('[data-draft-id]');
+    const draft = row && readLocalDrafts().find(d => d.draftId === row.dataset.draftId);
+    if (draft) {
+      e.preventDefault();
+      fillForm(draft.post, draft.draftId);
+      msg('info', '已载入本地草稿；编辑内容会继续保存在此浏览器', 'edit');
     }
   });
   $('.editor-card').addEventListener('input', queueDraftSave);
@@ -713,6 +730,7 @@ ShareX「自定义上传器」：
     currentDraftId = localDraftId;
     $('#draftSaveStatus').textContent = localDraftId ? '正在编辑本地草稿' : '';
     badge(p.id);
+    renderLocalDrafts(); renderCloud();
     updateStats(); renderPreview(); clearInvalid();
     msg('info', `已载入《${esc(p.title)}》，点“发布文章”即可覆盖更新`, 'edit');
     $('.editor-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -730,6 +748,7 @@ ShareX「自定义上传器」：
     $('#featured').checked = false;
     contentEl.value = '';
     badge(null); clearInvalid(); updateStats(); renderPreview();
+    renderLocalDrafts(); renderCloud();
   }
   function clearInvalid() { $$('.invalid').forEach(el => el.classList.remove('invalid')); }
 
