@@ -18,8 +18,7 @@ function authed(request, env) {
   if (h) return h === t;
   const auth = request.headers.get('Authorization') || '';
   if (auth.toLowerCase().startsWith('bearer ')) return auth.slice(7).trim() === t;
-  const q = (new URL(request.url).searchParams.get('token') || '').trim();
-  return q !== '' && q === t;
+  return false;
 }
 
 // 对外访问地址：优先用自定义 CDN 域名（环境变量 IMG_CDN_URL），否则走本站 /images/ 读取接口

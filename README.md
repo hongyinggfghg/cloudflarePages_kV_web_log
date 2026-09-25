@@ -40,7 +40,7 @@
 ## 🖼️ 图床（R2）
 
 - **存储**：图片存 R2 桶（绑定变量名 `IMG_R2`），键形如 `img/2026/09/xxxx.jpg`（按月归档，不含原始文件名）。
-- **上传**：admin.html 图床卡片支持点击选择 / 拖拽 / Ctrl+V 粘贴（截图直接粘贴即可自动上传并插入正文）；第三方工具走 `/api/upload`，支持 multipart（字段 `file`）和原始二进制两种请求体，鉴权可用 `X-Admin-Token` / `Authorization: Bearer` / `?token=`。
+- **上传**：admin.html 图床卡片支持点击选择 / 拖拽 / Ctrl+V 粘贴（截图直接粘贴即可自动上传并插入正文）；第三方工具走 `/api/upload`，支持 multipart（字段 `file`）和原始二进制两种请求体，鉴权使用 `X-Admin-Token` 请求头或 `Authorization: Bearer` 请求头。不要把管理员令牌放进 URL 参数。
 - **访问**：默认经 `/images/<key>` 从 R2 读取（永久强缓存 + CSP 沙箱防 SVG 夹带脚本），自动隐藏 R2 原始域名；若想用自定义 CDN 域名，把环境变量 `IMG_CDN_URL` 设为 `https://img.你的域名`，上传返回的外链会直接指向它。
 - **单张上限 20MB**，支持 jpg / png / gif / webp / avif / bmp / ico。 (R2 使用需要银行卡可选择不使用R2)
 
@@ -306,4 +306,3 @@ console.log(ok);</code></pre>
 - 发布密码只在**运行时**由使用者输入（或存于本浏览器），`admin.html` 本身不含密码，可公开部署；
 - 所有写操作（POST/PUT/DELETE）都要求请求头 `X-Admin-Token` 与服务端环境变量 `ADMIN_TOKEN` 一致，前端代码接触不到该变量；
 - 读接口公开且 CORS 全开，若不希望文章数据被任意第三方站点读取，可收紧 `functions/api/*.js` 顶部的 `CORS` 常量。
-
