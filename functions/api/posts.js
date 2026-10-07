@@ -14,5 +14,8 @@ export async function onRequestGet({ env }) {
     const { content, ...rest } = post;
     return { ...rest, words: textLen(content) };
   });
-  return RESP(list, 200, nextPublishAt ? { 'X-Next-Publish-At': nextPublishAt } : {});
+  return RESP(list, 200, {
+    ...(nextPublishAt ? { 'X-Next-Publish-At': nextPublishAt } : {}),
+    'Cache-Control': 'private, no-store',
+  });
 }
