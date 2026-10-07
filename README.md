@@ -20,9 +20,10 @@
 
 ```
 浏览器
- ├── 静态资源：index.html / style.css / script.js   ← Cloudflare Pages
+ ├── 静态资源：index.html / base.css / style.css / script.js   ← Cloudflare Pages
  ├── 数据请求：
- │    GET    /api/posts            ┐
+ │    GET    /api/posts            ┐ 文章列表（不含正文，含 words 字数）
+ │    GET    /api/post?id=xxx      │ 单篇文章（含正文，文章页按需拉取）
  │    GET    /api/admin/posts     │   后台读取（需鉴权）
  │    POST   /api/post             │
  │    DELETE /api/post?id=xxx      ├─ Pages Functions  ──►  Workers KV (BLOG_KV)
@@ -33,16 +34,18 @@
  └── 图床：
       POST   /api/upload           ┐  上传（multipart 字段 file，或图片二进制，兼容 PicGo / ShareX）
       DELETE /api/upload?key=xxx   ├─ Pages Functions  ──►  R2 存储桶 (IMG_R2)
-      GET    /api/images           │   (functions/api)      └─ 键 img/年/月/时间戳-随机串.ext
-      GET    /images/*             ┘   (functions/images)     从 R2 读图返回（隐藏 R2 原始域名，强缓存）
+      GET    /api/images           │  (functions/api)       └─ 键 img/年/月/时间戳-随机串.ext
+      GET    /images/*             ┘  (functions/images)     从 R2 读图返回（隐藏 R2 原始域名，强缓存）
 ```
+
+> Functions 的公共工具（CORS / JSON 响应 / 鉴权 / KV 读取）集中在 `functions/_lib.js`，各接口文件从这里引用。
 
 ## 🖼️ 图床（R2）
 
 - **存储**：图片存 R2 桶（绑定变量名 `IMG_R2`），键形如 `img/2026/09/xxxx.jpg`（按月归档，不含原始文件名）。
 - **上传**：admin.html 图床卡片支持点击选择 / 拖拽 / Ctrl+V 粘贴（截图直接粘贴即可自动上传并插入正文）；第三方工具走 `/api/upload`，支持 multipart（字段 `file`）和原始二进制两种请求体，鉴权使用 `X-Admin-Token` 请求头或 `Authorization: Bearer` 请求头。不要把管理员令牌放进 URL 参数。
 - **访问**：默认经 `/images/<key>` 从 R2 读取（永久强缓存 + CSP 沙箱防 SVG 夹带脚本），自动隐藏 R2 原始域名；若想用自定义 CDN 域名，把环境变量 `IMG_CDN_URL` 设为 `https://img.你的域名`，上传返回的外链会直接指向它。
-- **单张上限 20MB**，支持 jpg / png / gif / webp / avif / bmp / ico。 (R2 使用需要银行卡可选择不使用R2)
+- **单张上限 20MB**，支持 jpg / png / gif / webp / avif / bmp / ico。文件扩展名由实际 Content-Type 推导（不信任客户端文件名）；无法识别类型的 multipart 文件会被拒绝。(R2 使用需要银行卡可选择不使用R2)
 
 
 PicGo（自定义 Web 图床）：
@@ -62,15 +65,23 @@ ShareX（自定义上传器）：Method `POST`，URL `https://你的域名/api/u
 ```
 .
 ├── index.html          # 博客前端（单页应用）
+├── base.css            # 共享设计系统：M3 令牌 / reset / 按钮 / chip / 卡片（博客端与后台共用）
+├── style.css           # 博客端样式（依赖 base.css）
 ├── script.js           # 前端逻辑：路由、渲染、搜索、主题等（顶部含内置演示文章）
-├── style.css           # Material Design 3 风格样式
-├── admin.html          # 发布后台：写文章 / 图床管理 / 管理时间线 / 一键备份
+├── sanitize.js         # 正文 HTML 白名单净化器 + 共享 HTML 工具（window.BlogHTML）
+├── _headers            # 静态资源安全响应头（nosniff / CSP / /api/* 禁缓存）
+├── admin.html          # 发布后台页面结构
+├── admin.css           # 后台样式（依赖 base.css）
+├── admin.js            # 后台逻辑：发布 / 编辑 / 图床 / 时间线 / 备份
+├── avatar.jpg          # 头像 / favicon（根目录引用）
 ├── functions/
+│   ├── _lib.js         # Functions 共享工具：CORS / RESP / authed / readList（不参与路由）
 │   ├── api/
-│   │   ├── posts.js    # GET    /api/posts     读取已公开文章
+│   │   ├── posts.js    # GET    /api/posts     读取已公开文章（列表不含正文）
 │   │   ├── admin/
 │   │   │   └── posts.js # GET /api/admin/posts 后台读取全部文章（需鉴权）
-│   │   ├── post.js     # POST   /api/post      新建 / 覆盖更新（同 id）
+│   │   ├── post.js     # GET    /api/post?id=  单篇文章（含正文）
+│   │   │               # POST   /api/post      新建 / 覆盖更新（同 id）
 │   │   │               # DELETE /api/post?id=  删除文章
 │   │   ├── timeline.js # /api/timeline 的 GET / POST / PUT / DELETE
 │   │   ├── upload.js   # POST   /api/upload    上传图片到 R2
@@ -78,7 +89,6 @@ ShareX（自定义上传器）：Method `POST`，URL `https://你的域名/api/u
 │   │   └── images.js   # GET    /api/images    列出图床图片
 │   └── images/
 │       └── [[path]].js # GET    /images/*      从 R2 读图返回（访问层）
-└── 1788…a2.jpg         # 头像 / favicon（根目录引用）
 ```
 
 ## 🚀 部署到 Cloudflare Pages
@@ -117,7 +127,7 @@ Functions 目录会被 Pages 自动识别，无需任何构建配置。
 
 ## 📝 文章数据结构（表示方法之一）
 
-所有文章以 JSON 数组存于 KV 的 `posts` 键中，按 `date` 倒序排列。单篇文章的字段如下：
+所有文章以 JSON 数组（紧凑格式）存于 KV 的 `posts` 键中，按 `date` 倒序排列。单篇文章的字段如下：
 
 ```json
 {
@@ -149,6 +159,9 @@ Functions 目录会被 Pages 自动识别，无需任何构建配置。
 | `seed` | string |  | 封面种子，同一 seed 生成的封面固定不变；留空用 `id` |
 | `cover` | string |  | 自定义封面图 URL（后台“封面图片”输入框设置：可上传到 R2 图床或填任意外链；留空按分类自动生成），用于首页文章卡片与置顶大卡片 |
 | `publishAt` | string |  | 可选 ISO 日期时间；未来时间前对访客隐藏，到时自动公开 |
+| `words` | number |  | 只读：正文纯文本字数。`GET /api/posts` 列表不返回正文 `content`（省流量），但会附带本字段；列表卡片与总字数统计都用它 |
+
+**正文加载方式**：文章列表（首页卡片 / 归档 / 搜索）只拿摘要字段；打开文章页时前端再请求 `GET /api/post?id=` 获取完整正文并缓存，文章多以后也不会一次性传输全部 HTML。
 
 **封面规则**：未指定 `cover` 时，按分类关键词自动取图（`前端`→computer,keyboard；`生活`→city,nature；`game`→game,military），来自 loremflickr.com，用 `seed` 保证同一篇文章每次封面相同；指定了 `cover`（如自建 R2 图床外链 `/images/img/…`）则直接使用它。封面只出现在首页列表卡片与置顶大卡片上，文章详情页不显示封面。
 
@@ -262,8 +275,9 @@ console.log(ok);</code></pre>
 
 | 方法 | 路径 | 鉴权 | 说明 |
 |---|---|:---:|---|
-| GET | `/api/posts` | 无 | 返回已公开文章；未到发布时间的文章会隐藏 |
-| GET | `/api/admin/posts` | ✅ | 后台读取全部文章（包括定时发布文章） |
+| GET | `/api/posts` | 无 | 返回已公开文章列表（**不含正文**，含 `words` 字数）；未到发布时间的文章会隐藏，响应头 `X-Next-Publish-At` 提示下次公开时间 |
+| GET | `/api/post?id=xxx` | 无 | 返回单篇文章（**含正文**），文章页按需加载用；定时未到的文章对未鉴权请求返回 404 |
+| GET | `/api/admin/posts` | ✅ | 后台读取全部文章含正文（包括定时发布文章） |
 | POST | `/api/post` | ✅ | 新建文章；body 中带已有 `id` 则覆盖更新 |
 | POST | `/api/backup` | ✅ | 校验备份后完整替换文章与时间线 |
 | DELETE | `/api/post?id=xxx` | ✅ | 删除指定文章 |
@@ -276,11 +290,11 @@ console.log(ok);</code></pre>
 | GET | `/api/images` | ✅ | 列出图床图片（游标分页：单页最多 1000 条，带 `?cursor=` 翻页，返回 `{images, truncated, cursor}`） |
 | GET | `/images/<key>` | 无 | 读取图片（访问层，强缓存；此路径公开，等于图片外链） |
 
-错误码：`401` 密码错误、`400` 缺字段或非法 JSON、`404` 文章/条目不存在。
+错误码：`401` 密码错误、`400` 缺字段或非法 JSON、`404` 文章/条目不存在、`500` 写路径检测到 KV 数据损坏（拒绝写入以防覆盖丢数据，请到 KV 面板修复对应键）。所有写接口在 KV 键损坏时会拒绝写入而不是用空数据覆盖。
 
 ## 🛠️ 发布后台 admin.html 使用指南
 
-- **连接**：API 地址留空会自动填当前站点；填入 `ADMIN_TOKEN` 后点"测试连接"。可勾选"记住密码"（只存在本浏览器 localStorage，页面上不含任何密码，可放心公开部署）。
+- **连接**：API 地址默认自动填当前站点，也可手动改成其它地址（会记住，下次优先使用）；填入 `ADMIN_TOKEN` 后点"测试连接"。可勾选"记住密码"（只存在本浏览器 localStorage，页面上不含任何密码，可放心公开部署）。
 - **发布**：文章 ID、标题、正文三项必填；同 ID 发布即覆盖更新；`Ctrl+Enter` 快速发布；支持实时预览与字数统计。
 - **草稿 / 定时发布**：草稿保存在当前浏览器，编辑时会自动保存，也可手动保存、载入和删除；点击本地草稿整行或铅笔按钮即可载入，当前编辑的草稿会标记“编辑中”。发布成功后，正在编辑的本地草稿会自动移除。填写未来发布时间后发布会先保存到 KV，到点后访客接口自动公开文章，已打开的博客页也会在到点时刷新。后台文章列表需要 ADMIN_TOKEN 才能读取待发布内容。
 - **封面**：表单“封面图片”处可填 URL、点“上传”传到图床自动填入、点“图库”从已上传图片点选；点“恢复默认”即删除自定义封面（回落 loremflickr 自动生成）。
@@ -295,14 +309,17 @@ console.log(ok);</code></pre>
 |---|---|
 | 站点标题 | `index.html` 的 `<title>` / `<meta>`，以及 `script.js` 顶部 `SITE_TITLE` |
 | 建站日期（关于页"建站天数"） | `script.js` 的 `SITE_START` |
-| 分类下拉选项 | `admin.html` 的 `<select id="pCat">` |
+| 分类下拉选项 | `admin.js` 顶部的 `CATS` 数组（下拉框自动填充） |
 | 分类图标 / 封面关键词 | `script.js` 的 `CATEGORY_ICON` 和 `CAT_IMG` |
 | 离线兜底演示文章 | `script.js` 顶部内置 `POSTS` 数组 |
-| 头像 / favicon | 替换根目录 jpg 并全局替换文件名 |
+| 头像 / favicon | 替换根目录 `avatar.jpg`（文件名已统一，直接覆盖即可） |
+| 主题色 / 圆角 / 阴影 | `base.css` 顶部的 M3 设计令牌（博客端与后台同时生效） |
 | 关于页文案、社交链接 | `index.html` 的 `view-about` 区块 |
 
 ## 🔒 安全说明
 
 - 发布密码只在**运行时**由使用者输入（或存于本浏览器），`admin.html` 本身不含密码，可公开部署；
-- 所有写操作（POST/PUT/DELETE）都要求请求头 `X-Admin-Token` 与服务端环境变量 `ADMIN_TOKEN` 一致，前端代码接触不到该变量；
-- 读接口公开且 CORS 全开，若不希望文章数据被任意第三方站点读取，可收紧 `functions/api/*.js` 顶部的 `CORS` 常量。
+- 所有写操作（POST/PUT/DELETE）都要求请求头 `X-Admin-Token`（或 `Authorization: Bearer`）与服务端环境变量 `ADMIN_TOKEN` 一致，前端代码接触不到该变量；比较基于 SHA-256 摘要，避免时序侧信道；
+- 写路径在 KV 数据损坏时会返回 500 拒绝写入，防止用空数组覆盖真实文章；公开读路径降级为空列表并记录错误，站点仍可打开；
+- 静态资源通过根目录 `_headers` 下发 `nosniff`、`X-Frame-Options`、CSP 等安全响应头；
+- 读接口公开且 CORS 全开，若不希望文章数据被任意第三方站点读取，可收紧 `functions/_lib.js` 顶部的 `CORS` 常量。

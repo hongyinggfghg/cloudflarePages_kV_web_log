@@ -10,13 +10,15 @@ export async function onRequestGet({ request, params, env }) {
 
   const headers = {
     'Content-Type': (obj.httpMetadata && obj.httpMetadata.contentType) || 'application/octet-stream',
-    'Cache-Control': 'public, max-age=31536000, immutable', 
+    'Cache-Control': 'public, max-age=31536000, immutable',
     'ETag': obj.httpEtag,
     'Access-Control-Allow-Origin': '*',
     'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox",
     'X-Content-Type-Options': 'nosniff',
   };
-  if (request.headers.get('If-None-Match') === obj.httpEtag) {
+  // includes() 兼容弱 ETag（W/"…"）与客户端发来的多值 If-None-Match
+  const inm = request.headers.get('If-None-Match');
+  if (inm && inm.includes(obj.httpEtag)) {
     return new Response(null, { status: 304, headers });
   }
   return new Response(obj.body, { headers });

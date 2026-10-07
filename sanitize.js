@@ -2,9 +2,9 @@
   'use strict';
 
   const ALLOWED_TAGS = new Set([
-    'A', 'B', 'BLOCKQUOTE', 'BR', 'CODE', 'DEL', 'EM', 'FIGCAPTION', 'FIGURE',
+    'A', 'B', 'BLOCKQUOTE', 'BR', 'CODE', 'COL', 'COLGROUP', 'DEL', 'EM', 'FIGCAPTION', 'FIGURE',
     'H1', 'H2', 'H3', 'HR', 'I', 'IMG', 'LI', 'OL', 'P', 'PRE', 'S', 'SMALL',
-    'SPAN', 'STRONG', 'SUB', 'SUP', 'TABLE', 'TBODY', 'TD', 'TH', 'THEAD', 'TR',
+    'SPAN', 'STRONG', 'SUB', 'SUP', 'TABLE', 'TBODY', 'TD', 'TFOOT', 'TH', 'THEAD', 'TR',
     'U', 'UL'
   ]);
   const DROP_WITH_CONTENT = new Set([
@@ -71,4 +71,19 @@
 
     return parsed.body.innerHTML;
   };
+
+  /* ============ 共享 HTML 工具（博客端 script.js 与后台 admin.js 共用） ============ */
+
+  // HTML 转义：任何要拼进 innerHTML 模板的动态文本都必须先过这里
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  // 代码块按纯文本渲染：内容先反转义再统一转义，任意语言的 < > & 都能原样显示
+  const unescapeEntities = s => String(s).replace(/&(?:amp|lt|gt|quot|#39);/gi, c => ({ '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'" }[c.toLowerCase()]));
+  const plainCodeBlocks = html => String(html).replace(/<pre\b([^>]*)>([\s\S]*?)<\/pre>/gi, (m, attrs, inner) => {
+    const cm = inner.match(/^\s*<code\b[^>]*>([\s\S]*?)<\/code>\s*$/i);
+    const lang = (attrs.match(/data-lang\s*=\s*"([^"]*)"/i) || [])[1] || 'text';
+    return `<pre data-lang="${esc(lang)}"><code>${esc(unescapeEntities(cm ? cm[1] : inner))}</code></pre>`;
+  });
+
+  window.BlogHTML = { esc, unescapeEntities, plainCodeBlocks };
 })();

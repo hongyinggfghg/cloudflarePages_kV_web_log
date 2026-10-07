@@ -1,25 +1,13 @@
+import { RESP, onRequestOptions, authed, readList } from '../../_lib.js';
+export { onRequestOptions };
+
+// GET /api/admin/posts —— 后台读取全部文章（含定时发布，需鉴权），返回完整正文供编辑。
 export async function onRequestGet({ request, env }) {
-  if (!env.ADMIN_TOKEN || request.headers.get('X-Admin-Token') !== env.ADMIN_TOKEN) {
-    return RESP({ error: 'X-Admin-Token 校验失败' }, 401);
+  if (!(await authed(request, env))) return RESP({ error: 'X-Admin-Token 校验失败' }, 401);
+  try {
+    const posts = await readList(env, 'posts', { strict: true });
+    return RESP(posts, 200, { 'Cache-Control': 'private, no-store' });
+  } catch (e) {
+    return RESP({ error: e.message }, 500);
   }
-  const raw = await env.BLOG_KV.get('posts');
-  let data = [];
-  try { data = raw ? JSON.parse(raw) : []; } catch (e) { data = []; }
-  return RESP(Array.isArray(data) ? data : []);
-}
-
-export async function onRequestOptions() {
-  return new Response(null, { headers: CORS });
-}
-
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, X-Admin-Token',
-};
-function RESP(data, status = 200) {
-  return new Response(JSON.stringify(data, null, 2), {
-    status,
-    headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'private, no-store', ...CORS },
-  });
 }

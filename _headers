@@ -1,0 +1,13 @@
+# Cloudflare Pages 静态资源响应头（只作用于静态文件，不影响 Functions 返回）
+# 注意：/_headers 必须在部署输出目录的根目录（本项目即仓库根目录）。
+
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' https: data:; connect-src 'self'; object-src 'none'; base-uri 'self'
+  Cross-Origin-Opener-Policy: same-origin
+
+/api/*
+  Cache-Control: no-store

@@ -1,7 +1,10 @@
+import { RESP, onRequestOptions, authed } from '../_lib.js';
+export { onRequestOptions };
+
+// POST /api/backup —— 校验备份后整体替换 posts + timeline 两个键。
+// 注意：这是一键覆盖式恢复；恢复前请先在后台导出当前数据作为备份。
 export async function onRequestPost({ request, env }) {
-  if (!env.ADMIN_TOKEN || request.headers.get('X-Admin-Token') !== env.ADMIN_TOKEN) {
-    return RESP({ error: 'X-Admin-Token 校验失败' }, 401);
-  }
+  if (!(await authed(request, env))) return RESP({ error: 'X-Admin-Token 校验失败' }, 401);
   if (!env.BLOG_KV) return RESP({ error: '未绑定 KV 命名空间（BLOG_KV）' }, 500);
 
   let backup;
@@ -33,27 +36,11 @@ export async function onRequestPost({ request, env }) {
 
   try {
     await Promise.all([
-      env.BLOG_KV.put('posts', JSON.stringify(backup.posts, null, 2)),
-      env.BLOG_KV.put('timeline', JSON.stringify(backup.timeline, null, 2)),
+      env.BLOG_KV.put('posts', JSON.stringify(backup.posts)),
+      env.BLOG_KV.put('timeline', JSON.stringify(backup.timeline)),
     ]);
     return RESP({ ok: true, posts: backup.posts.length, timeline: backup.timeline.length });
   } catch (e) {
     return RESP({ error: '写入 KV 失败：' + e.message }, 500);
   }
-}
-
-export async function onRequestOptions() {
-  return new Response(null, { headers: CORS });
-}
-
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, X-Admin-Token',
-};
-function RESP(data, status = 200) {
-  return new Response(JSON.stringify(data, null, 2), {
-    status,
-    headers: { 'Content-Type': 'application/json; charset=utf-8', ...CORS },
-  });
 }

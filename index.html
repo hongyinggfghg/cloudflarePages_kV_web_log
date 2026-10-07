@@ -8,12 +8,13 @@
 <meta name="theme-color" content="#F5FAF9" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0E1515" media="(prefers-color-scheme: dark)">
 
-<link rel="icon" type="image/jpeg" href="1788099527648d80cbcbd6b06cbe7049e24d46d24d8a580a2.jpg">
-<link rel="apple-touch-icon" href="1788099527648d80cbcbd6b06cbe7049e24d46d24d8a580a2.jpg">
+<link rel="icon" type="image/jpeg" href="avatar.jpg">
+<link rel="apple-touch-icon" href="avatar.jpg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,300..600,0..1,0&display=block" rel="stylesheet">
+<link rel="stylesheet" href="base.css">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -25,7 +26,7 @@
 <header class="top-app-bar" id="appBar">
   <div class="app-bar-inner">
     <a class="brand" href="#/" aria-label="回到首页">
-      <img class="brand-mark" src="1788099527648d80cbcbd6b06cbe7049e24d46d24d8a580a2.jpg" alt="博客">
+      <img class="brand-mark" src="avatar.jpg" alt="博客">
       <span class="brand-name">sunset_red的博客</span>
     </a>
     <nav class="app-nav" aria-label="页面导航">
@@ -111,7 +112,7 @@
       
       <aside class="home-aside">
         <div class="aside-card card">
-          <img class="aside-avatar" src="1788099527648d80cbcbd6b06cbe7049e24d46d24d8a580a2.jpg" alt="头像">
+          <img class="aside-avatar" src="avatar.jpg" alt="头像">
           <h3 class="aside-name">sunset_red</h3>
           <p class="aside-bio"> 最好的？ai使用者 / 哈基米音乐享受者</p>
           <div class="aside-social">
@@ -147,7 +148,6 @@
       <div class="post-main">
         <a class="btn btn-text post-back" href="#/"><span class="msr">arrow_back</span>返回首页</a>
         <div class="post-head" id="postHead"></div>
-        <figure class="post-cover" id="postCover"></figure>
         <div class="prose" id="postBody"></div>
 
         <div class="post-actions">
@@ -179,7 +179,7 @@
 
     <div class="about-grid">
       <div class="card about-intro">
-        <img class="about-avatar" src="1788099527648d80cbcbd6b06cbe7049e24d46d24d8a580a2.jpg" alt="头像">
+        <img class="about-avatar" src="avatar.jpg" alt="头像">
         <div class="about-intro-text">
           <h2>Sunset_Red <small>sunset_red</small></h2>
           <p class="about-role"> · 哈基米-爱好者 · 《Squad》</p>
@@ -246,7 +246,6 @@
 <div class="snackbar" id="snackbar" role="status" aria-live="polite">
   <span class="msr" id="snackIcon">check_circle</span>
   <span class="snackbar-msg" id="snackMsg"></span>
-  <button class="snackbar-action" id="snackAction" hidden></button>
 </div>
 
 <script src="sanitize.js"></script>

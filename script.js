@@ -4,8 +4,6 @@
     /* ============================================================
      * 红云的博客 · sunset_red的web_log!!!
      * ============================================================ */
-    const API_BASE = '';
-
     const SITE_TITLE = 'sunset_red的web_log!!!';
     const SITE_START = new Date('2026-08-16'); // 建站日期 2026.8.16
 
@@ -24,20 +22,16 @@
     
     const $  = (s, c = document) => c.querySelector(s);
     const $$ = (s, c = document) => Array.from(c.querySelectorAll(s));
-    const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    // esc / plainCodeBlocks 等共享工具来自 sanitize.js（window.BlogHTML）
+    const esc = window.BlogHTML.esc;
     const fmtDate = iso => {
         const m = String(iso || '').match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
         return m ? `${m[1]} 年 ${+m[2]} 月 ${+m[3]} 日` : String(iso || '');
     };
     const plainText = html => String(html || '').replace(/<[^>]+>/g, '');
-    // 代码块按纯文本渲染：内容先反转义再统一转义，任意语言的 < > & 都能原样显示
-    const unescapeEntities = s => String(s).replace(/&(?:amp|lt|gt|quot|#39);/gi, c => ({ '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'" }[c.toLowerCase()]));
-    const plainCodeBlocks = html => String(html).replace(/<pre\b([^>]*)>([\s\S]*?)<\/pre>/gi, (m, attrs, inner) => {
-        const cm = inner.match(/^\s*<code\b[^>]*>([\s\S]*?)<\/code>\s*$/i);
-        const lang = (attrs.match(/data-lang\s*=\s*"([^"]*)"/i) || [])[1] || 'text';
-        return `<pre data-lang="${esc(lang)}"><code>${esc(unescapeEntities(cm ? cm[1] : inner))}</code></pre>`;
-    });
-    const countChars = p => plainText(p.content).replace(/\s/g, '').length;
+    const plainCodeBlocks = window.BlogHTML.plainCodeBlocks;
+    // 字数：优先用服务端计算的 words（/api/posts 不再传正文），离线兜底时从 content 统计
+    const countChars = p => p.words != null ? p.words : plainText(p.content).replace(/\s/g, '').length;
     const readMin = p => Math.max(1, Math.round(countChars(p) / 400));
     const fmtWords = n => n >= 10000 ? (n / 10000).toFixed(1) + ' 万' : String(n);
     const loadJSON = (k, f) => { try { return JSON.parse(localStorage.getItem(k)) ?? f; } catch (e) { return f; } };
@@ -116,18 +110,13 @@
 
     
     let snackTimer;
-    function showSnack(msg, icon = 'check_circle', action) {
+    function showSnack(msg, icon = 'check_circle') {
         const snack = document.getElementById('snackbar');
         if (!snack) return;
         const msgEl = document.getElementById('snackMsg');
         const iconEl = document.getElementById('snackIcon');
-        const ab = document.getElementById('snackAction');
         if (msgEl) msgEl.textContent = msg;
         if (iconEl) iconEl.textContent = icon;
-        if (ab) {
-            if (action) { ab.hidden = false; ab.textContent = action.label; ab.onclick = () => { action.fn(); hideSnack(); }; }
-            else { ab.hidden = true; ab.onclick = null; }
-        }
         snack.classList.add('show');
         clearTimeout(snackTimer);
         snackTimer = setTimeout(hideSnack, 3400);
@@ -385,11 +374,23 @@
         syncMarkBtn();
         showSnack(marks[id] ? '已加入书签' : '已移出书签', 'bookmark');
     }
-    function handleShare() {
-        const done = () => showSnack('链接已复制到剪贴板', 'link');
+    // 剪贴板写入，带 execCommand 兜底（非 https 环境下 clipboard API 不可用）
+    async function copyToClipboard(text) {
         if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(location.href).then(done, done);
-        } else done();
+            try { await navigator.clipboard.writeText(text); return true; } catch (e) { /* 落到兜底 */ }
+        }
+        try {
+            const ta = document.createElement('textarea');
+            ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+            document.body.appendChild(ta); ta.select();
+            const ok = document.execCommand('copy');
+            ta.remove();
+            return ok;
+        } catch (e) { return false; }
+    }
+    function handleShare() {
+        copyToClipboard(location.href).then(ok =>
+            showSnack(ok ? '链接已复制到剪贴板' : '复制失败，请从地址栏复制链接', ok ? 'link' : 'error'));
     }
 
     
@@ -398,8 +399,9 @@
         if (!btn) return;
         const card = btn.closest('.code-card');
         const code = card && card.querySelector('code');
-        if (code && navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(code.innerText).then(() => showSnack('代码已复制', 'content_copy'));
+        if (code) {
+            copyToClipboard(code.innerText).then(ok =>
+                showSnack(ok ? '代码已复制' : '复制失败', ok ? 'content_copy' : 'error'));
         }
     }
     function handleHeadCatClick(e) {
@@ -441,6 +443,16 @@
         onScroll();
     }
 
+    // 拉取单篇完整正文并缓存进 POSTS 列表项（/api/posts 列表不携带 content）
+    async function fetchPostContent(p) {
+        const r = await fetch('/api/post?id=' + encodeURIComponent(p.id), { headers: { Accept: 'application/json' } });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const full = await r.json();
+        p.content = full.content;
+        if (full.words != null) p.words = full.words;
+        return p;
+    }
+
     function route() {
         const h = location.hash.replace(/^#\/?/, '');
         const parts = h.split('/');
@@ -460,7 +472,17 @@
 
         if (name === 'post' && post) {
             currentPost = post;
-            safe(() => renderPost(post));
+            if (post.content != null) {
+                safe(() => renderPost(post));
+            } else {
+                const body = document.getElementById('postBody');
+                if (body) body.innerHTML = '<p class="tl-empty">正文加载中…</p>';
+                fetchPostContent(post).then(full => {
+                    if (currentPost === post && full.content != null) safe(() => renderPost(full));
+                }).catch(() => {
+                    if (body) body.innerHTML = '<p class="tl-empty">正文加载失败，请刷新重试。</p>';
+                });
+            }
         } else {
             currentPost = null;
             document.title = SITE_TITLE;
@@ -550,6 +572,7 @@
 
     /* ==================== Workers KV 加载 ==================== */
     let publishRefreshTimer = null;
+    let kvSeq = 0; // 序号锁：丢弃交错返回的旧响应
     function schedulePublishRefresh(iso) {
         clearTimeout(publishRefreshTimer);
         publishRefreshTimer = null;
@@ -564,14 +587,15 @@
 
     async function loadFromKV() {
         if (location.protocol === 'file:') return;
-        const base = (API_BASE || '').trim().replace(/\/+$/, '');
+        const seq = ++kvSeq;
 
-        
         try {
-            const r = await fetch(base + '/api/posts?t=' + Date.now(), { headers: { Accept: 'application/json' } });
+            const r = await fetch('/api/posts?t=' + Date.now(), { headers: { Accept: 'application/json' } });
+            if (seq !== kvSeq) return;
             if (r.ok) {
                 schedulePublishRefresh(r.headers.get('X-Next-Publish-At'));
                 const posts = await r.json();
+                if (seq !== kvSeq) return;
                 if (Array.isArray(posts) && posts.length) {
                     POSTS.length = 0;
                     POSTS.push(...posts);
@@ -579,7 +603,18 @@
 
                     if (currentRoute === 'post' && currentPost) {
                         const fresh = POSTS.find(p => p.id === currentPost.id);
-                        if (fresh) { currentPost = fresh; safe(() => renderPost(fresh)); }
+                        if (fresh) {
+                            // 保留已取回的正文，避免刷新时正文区被清空
+                            if (fresh.content == null && currentPost.content != null) {
+                                fresh.content = currentPost.content;
+                                if (currentPost.words != null) fresh.words = currentPost.words;
+                            }
+                            currentPost = fresh;
+                            if (fresh.content != null) safe(() => renderPost(fresh));
+                            else fetchPostContent(fresh).then(full => {
+                                if (currentPost === fresh && full.content != null) safe(() => renderPost(full));
+                            }).catch(() => {});
+                        }
                     }
                     if (pendingPostId) {
                         const found = POSTS.find(p => p.id === pendingPostId);
@@ -595,9 +630,9 @@
             console.warn(' KV 文章读取失败，使用内置演示数据：', e && e.message);
         }
 
-        
         try {
-            const tr = await fetch(base + '/api/timeline?t=' + Date.now());
+            const tr = await fetch('/api/timeline?t=' + Date.now());
+            if (seq !== kvSeq) return;
             if (tr.ok) {
                 const items = await tr.json();
                 if (Array.isArray(items)) renderTimeline(items);

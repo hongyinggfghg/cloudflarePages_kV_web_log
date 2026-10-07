@@ -1,11 +1,11 @@
+import { RESP, onRequestOptions, authed } from '../_lib.js';
+export { onRequestOptions };
 
 // GET /api/images —— 列出图床里的图片（需鉴权），配合 admin.html 的图床管理卡片使用。
 // R2 单次 list() 上限 1000 条，因此支持游标分页：首次不带参数，之后带上一页返回的 ?cursor= 继续；
 // 返回的 cursor 为 null / truncated 为 false 时表示已经枚举到末尾。
 export async function onRequestGet({ request, env }) {
-  const t = env.ADMIN_TOKEN;
-  const h = (request.headers.get('X-Admin-Token') || '').trim();
-  if (!t || h !== t) return RESP({ error: '鉴权失败：X-Admin-Token 不正确' }, 401);
+  if (!(await authed(request, env))) return RESP({ error: '鉴权失败：X-Admin-Token 不正确' }, 401);
   if (!env.IMG_R2) return RESP({ error: '未绑定 R2 存储桶（IMG_R2）' }, 500);
   const url = new URL(request.url);
   try {
@@ -31,20 +31,4 @@ export async function onRequestGet({ request, env }) {
   } catch (e) {
     return RESP({ error: '读取 R2 列表失败：' + e.message }, 500);
   }
-}
-
-export async function onRequestOptions() {
-  return new Response(null, { headers: CORS });
-}
-
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, X-Admin-Token',
-};
-function RESP(data, status = 200) {
-  return new Response(JSON.stringify(data, null, 2), {
-    status,
-    headers: { 'Content-Type': 'application/json; charset=utf-8', ...CORS },
-  });
 }
