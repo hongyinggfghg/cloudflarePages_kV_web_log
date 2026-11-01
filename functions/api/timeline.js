@@ -50,14 +50,18 @@ export async function onRequestPut({ request, env }) {
 
 export async function onRequestDelete({ request, env }) {
   if (!(await authed(request, env))) return RESP({ error: 'X-Admin-Token 校验失败' }, 401);
-  const i = parseInt(new URL(request.url).searchParams.get('i'), 10);
+  const raw = new URL(request.url).searchParams.get('i');
+  const i = parseInt(raw, 10);
+  if (raw == null || !Number.isInteger(i) || i < 0) {
+    return RESP({ error: '缺少或非法 ?i= 参数（非负整数）' }, 400);
+  }
   let list;
   try {
     list = await readList(env, 'timeline', { strict: true });
   } catch (e) {
     return RESP({ error: e.message }, 500);
   }
-  if (!Number.isInteger(i) || i < 0 || i >= list.length) {
+  if (i >= list.length) {
     return RESP({ error: '条目不存在，请刷新列表后重试' }, 404);
   }
   list.splice(i, 1);

@@ -11,6 +11,9 @@
   // 分类单点维护：改这里即可，下拉选项会自动填充
   const CATS = ['前端', '生活', 'game'];
 
+  // 与后端 functions/api/post.js 的 ID_RE 一致：非空、不含空格 / #，限长 64
+  const ID_RE = /^[^\s/#]{1,64}$/;
+
 
   const root = document.documentElement;
   root.dataset.theme = localStorage.getItem('hy-blog-theme') ||
@@ -59,7 +62,8 @@
   function conn(text, icon, state) {
     const el = $('#connStatus');
     el.className = 'conn-status' + (state ? ' ' + state : '');
-    el.innerHTML = `<span class="msr">${icon}</span>${text}`;
+    // icon 为内部静态值；text 统一转义，防止将来有人把接口错误信息直接传进来
+    el.innerHTML = `<span class="msr">${esc(icon)}</span>${esc(text)}`;
   }
 
 
@@ -306,6 +310,11 @@
     const content = contentEl.value.trim();
     const missing = [];
     if (!id) missing.push('#pId');
+    else if (!ID_RE.test(id)) {
+      $('#pId').classList.add('invalid');
+      msg('err', '文章 ID 需 1-64 位且不含空格、/ 和 #（网址 #/post/:id 用）', 'error');
+      return null;
+    }
     if (!title) missing.push('#pTitle');
     if (!content) missing.push('#content');
     if (missing.length) {
@@ -629,7 +638,8 @@
   }
 
   function insertToEditor(url, name) {
-    const snip = `<figure><img src="${url}" alt="${name || '图片'}" loading="lazy"><figcaption>图片说明</figcaption></figure>\n`;
+    // url/name 可能来自第三方 API 返回值，拼进 HTML 属性前必须转义
+    const snip = `<figure><img src="${esc(url)}" alt="${esc(name || '图片')}" loading="lazy"><figcaption>图片说明</figcaption></figure>\n`;
     const pos = contentEl.selectionStart ?? contentEl.value.length;
     contentEl.setRangeText(snip, pos, pos, 'end');
     queueDraftSave();

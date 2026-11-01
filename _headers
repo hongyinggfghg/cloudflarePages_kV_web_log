@@ -9,5 +9,14 @@
   Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' https: data:; connect-src 'self'; object-src 'none'; base-uri 'self'
   Cross-Origin-Opener-Policy: same-origin
 
+# 发布后台允许连接任一 https API 地址（「连接设置」里可手填其它站点）
+/admin.html
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' https: data:; connect-src 'self' https:; object-src 'none'; base-uri 'self'
+  Cross-Origin-Opener-Policy: same-origin
+
 /api/*
   Cache-Control: no-store

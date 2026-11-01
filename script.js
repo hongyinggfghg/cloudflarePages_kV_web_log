@@ -142,7 +142,10 @@
     function highlight(text, q) {
         const safeText = esc(text);
         if (!q) return safeText;
-        const re = new RegExp('(' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
+        // 搜索词先做与正文一致的 HTML 转义（& → &amp; 等），
+        // 否则搜 "&"、"amp" 会命中实体内部产生 <mark>&</mark>amp; 这类错位
+        const needle = esc(q).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const re = new RegExp('(' + needle + ')', 'gi');
         return safeText.replace(re, '<mark>$1</mark>');
     }
     function getFiltered() {

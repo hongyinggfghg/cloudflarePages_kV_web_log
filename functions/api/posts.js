@@ -7,8 +7,16 @@ export { onRequestOptions };
 export async function onRequestGet({ env }) {
   const posts = await readList(env, 'posts');
   const now = Date.now();
-  const visible = posts.filter(post => !post.publishAt || (Number.isFinite(Date.parse(post.publishAt)) && Date.parse(post.publishAt) <= now));
-  const upcoming = posts.map(post => Date.parse(post.publishAt)).filter(time => Number.isFinite(time) && time > now);
+  // 与 GET /api/post 口径一致：publishAt 无法解析（脏数据）时视为没有定时，照常公开
+  const at = post => {
+    const t = Date.parse(post.publishAt || '');
+    return Number.isFinite(t) ? t : NaN;
+  };
+  const visible = posts.filter(post => {
+    const t = at(post);
+    return !Number.isFinite(t) || t <= now;
+  });
+  const upcoming = posts.map(at).filter(t => Number.isFinite(t) && t > now);
   const nextPublishAt = upcoming.length ? new Date(Math.min(...upcoming)).toISOString() : '';
   const list = visible.map(post => {
     const { content, ...rest } = post;
