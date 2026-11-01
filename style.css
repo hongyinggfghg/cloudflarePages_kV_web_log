@@ -374,14 +374,19 @@ mark { background: var(--md-primary-container); color: var(--md-on-primary-conta
 @media (min-width: 1280px) {
   .nav-rail { display: flex; }
   .app-nav { display: none !important; }
-  .shell { margin-left: 88px; max-width: 1240px; }
+  /* rail 固定在左侧 88px；把 rail 宽度并入 max-width、用 padding-left 让位，
+     保持 margin:0 auto 整体居中 —— 否则 margin-left 固定 + margin-right:auto
+     会把内容推到左边，右侧留一大条空白 */
+  .shell { margin: 0 auto; max-width: 1328px; padding: 96px 24px 64px 112px; }
+  .app-bar-inner { max-width: 1328px; padding-left: 112px; }
 }
 @media (min-width: 1024px) and (max-width: 1279px) {
   .nav-rail { display: flex; width: 72px; }
   .rail-item { width: 60px; }
   .rail-label { display: none; }
   .app-nav { display: none !important; }
-  .shell { margin-left: 72px; }
+  .shell { margin: 0 auto; max-width: 1312px; padding: 96px 24px 64px 96px; }
+  .app-bar-inner { max-width: 1312px; padding-left: 96px; }
 }
 @media (min-width: 768px) and (max-width: 1023px) {
   .app-nav { display: flex; }
