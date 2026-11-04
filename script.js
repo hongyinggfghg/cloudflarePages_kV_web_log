@@ -2,7 +2,7 @@
     'use strict';
 
     /* ============================================================
-     * 红云的博客 · sunset_red的web_log!!!
+     *                   sunset_red的web_log!!!
      * ============================================================ */
     const SITE_TITLE = 'sunset_red的web_log!!!';
     const SITE_START = new Date('2026-08-16'); // 建站日期 2026.8.16
@@ -10,8 +10,8 @@
     
     const POSTS = [
         {
-            id: 'hello', title: 'hello',
-            excerpt: '你看到这个时kv容器已经死了',
+            id: 'Error_KV', title: 'Error_KV',
+            excerpt: 'Error_KV 未能正确获得 BLOG_KV',
             category: '前端', tags: ['Workers', 'KV', '前端'], date: '2026-08-20', seed: 'kvblog', heat: 51, featured: true,
             content: `<h1>hello</h1>`
         }
@@ -40,7 +40,7 @@
     const on = (sel, evt, fn) => {
         const el = document.querySelector(sel);
         if (el) el.addEventListener(evt, fn);
-        else console.warn('[红云的博客] 元素不存在，已跳过绑定：' + sel);
+        else console.warn('元素不存在，已跳过绑定：' + sel);
     };
     const safe = fn => { try { fn(); } catch (e) { console.error('渲染出错：', e); } };
 
